@@ -2,15 +2,99 @@
 #include "structs.h"
 #include <stdio.h>
 #define FUNCTIONS_H
+
+// load inmediate value into register
 #define GEN_LD_N(reg_name) \
 void LD_##reg_name##_n() { \
     reg->reg_name = read_byte(reg->pc++); \
 } 
 
+// copy value from r2 to r1
 #define GEN_LD_R1_R2(r1, r2) \
 void LD_##r1##_##r2##() { \
     reg->r1 = reg->r2; \
 }
+
+// load value from memory in bc into register
+#define GEN_REG_BC(reg_name) \
+void LD_##reg_name##_bc() { \
+    reg->reg_name = read_byte(reg->bc); \
+}
+
+// load value from memory in de into register
+#define GEN_REG_DE(reg_name) \
+void LD_##reg_name##_de() { \
+    reg->reg_name = read_byte(reg->de); \
+}
+
+// load value from memory in hl into register
+#define GEN_REG_HL(reg_name) \
+void LD_##reg_name##_hl() { \
+    reg->reg_name = read_byte(reg->hl); \
+}
+
+// load value from memory in [nn], 16 bit value, into register
+#define GEN_REG_NN(reg_name) \
+void LD_##reg_name##_nn() { \
+    uint16_t address = read_byte(reg->pc++) | (read_byte(reg->pc++) << 8); \
+    reg->reg_name = read_byte(address); \
+}
+
+uint8_t read_byte(uint16_t address) {
+    if (address >= 0x0000 && address <= 0x7FFF) {
+        return memory->rom[address];
+    } else if (address >= 0x8000 && address <= 0x9FFF) {
+        return memory->vram[address - 0x8000];
+    } else if (address >= 0xA000 && address <= 0xBFFF) {
+        return memory->external[address - 0xA000];
+    } else if (address >= 0xC000 && address <= 0xDFFF) {
+        return memory->wram[address - 0xC000];
+    } else if (address >= 0xE000 && address <= 0xFDFF) {
+        return memory->wram[address - 0xE000];
+    } else if (address >= 0xFE00 && address <= 0xFE9F) {
+        return memory->oam[address - 0xFE00];
+    } else if (address >= 0xFF00 && address <= 0xFF7F){
+        return memory->io[address - 0xFF4C];
+    } else if (address >= 0xFF80 && address <= 0xFFFE){
+        return memory->hram[address - 0xFF80];
+    } else if (address == 0xFFFF){
+        return memory->ie;
+    }
+    return 0xFF;
+}
+
+GEN_REG_BC(a);
+GEN_REG_BC(b);
+GEN_REG_BC(c);
+GEN_REG_BC(d);
+GEN_REG_BC(e);
+GEN_REG_BC(h);
+GEN_REG_BC(l);
+
+GEN_REG_DE(a);
+GEN_REG_DE(b);
+GEN_REG_DE(c);
+GEN_REG_DE(d);
+GEN_REG_DE(e);
+GEN_REG_DE(h);
+GEN_REG_DE(l);
+
+GEN_REG_HL(a);
+GEN_REG_HL(b);
+GEN_REG_HL(c);
+GEN_REG_HL(d);
+GEN_REG_HL(e);
+GEN_REG_HL(h);
+GEN_REG_HL(l);
+
+GEN_REG_NN(a);
+GEN_REG_NN(b);
+GEN_REG_NN(c);
+GEN_REG_NN(d);
+GEN_REG_NN(e);
+GEN_REG_NN(h);
+GEN_REG_NN(l);
+
 
 GEN_LD_N(b);
 GEN_LD_N(c);
@@ -26,56 +110,55 @@ GEN_LD_R1_R2(a, d);
 GEN_LD_R1_R2(a, e);
 GEN_LD_R1_R2(a, h);
 GEN_LD_R1_R2(a, l);
-GEN_LD_R1_R2(a, hl);
+GEN_LD_R1_R2(b, a);
 GEN_LD_R1_R2(b, b);
 GEN_LD_R1_R2(b, c);
 GEN_LD_R1_R2(b, d);
 GEN_LD_R1_R2(b, e);
 GEN_LD_R1_R2(b, h);
 GEN_LD_R1_R2(b, l);
-GEN_LD_R1_R2(b, hl);
+GEN_LD_R1_R2(c, a);
 GEN_LD_R1_R2(c, b);
 GEN_LD_R1_R2(c, c);
 GEN_LD_R1_R2(c, d);
 GEN_LD_R1_R2(c, e);
 GEN_LD_R1_R2(c, h);
 GEN_LD_R1_R2(c, l);
-GEN_LD_R1_R2(c, hl);
+GEN_LD_R1_R2(d, a);
 GEN_LD_R1_R2(d, b);
 GEN_LD_R1_R2(d, c);
 GEN_LD_R1_R2(d, d);
 GEN_LD_R1_R2(d, e);
 GEN_LD_R1_R2(d, h);
 GEN_LD_R1_R2(d, l);
-GEN_LD_R1_R2(d, hl);
+GEN_LD_R1_R2(e, a);
 GEN_LD_R1_R2(e, b);
 GEN_LD_R1_R2(e, c);
 GEN_LD_R1_R2(e, d);
 GEN_LD_R1_R2(e, e);
 GEN_LD_R1_R2(e, h);
 GEN_LD_R1_R2(e, l);
-GEN_LD_R1_R2(e, hl);
+GEN_LD_R1_R2(h, a);
 GEN_LD_R1_R2(h, b);
 GEN_LD_R1_R2(h, c);
 GEN_LD_R1_R2(h, d);
 GEN_LD_R1_R2(h, e);
 GEN_LD_R1_R2(h, h);
 GEN_LD_R1_R2(h, l);
-GEN_LD_R1_R2(h, hl);
+GEN_LD_R1_R2(l, a);
 GEN_LD_R1_R2(l, b);
 GEN_LD_R1_R2(l, c);
 GEN_LD_R1_R2(l, d);
 GEN_LD_R1_R2(l, e);
 GEN_LD_R1_R2(l, h);
 GEN_LD_R1_R2(l, l);
-GEN_LD_R1_R2(l, hl);
+GEN_LD_R1_R2(hl, a);
 GEN_LD_R1_R2(hl, b);
 GEN_LD_R1_R2(hl, c);
 GEN_LD_R1_R2(hl, d);
 GEN_LD_R1_R2(hl, e);
 GEN_LD_R1_R2(hl, h);
 GEN_LD_R1_R2(hl, l);
-
 
 instruction_ptr opcode_table[256] = {
     // 0x0_
@@ -151,76 +234,76 @@ instruction_ptr opcode_table[256] = {
     [0x3F] = NULL, // CCF
 
     // 0x4_ (The LD B, r block)
-    [0x40] = NULL, // LD B, B
-    [0x41] = NULL, // LD B, C
-    [0x42] = NULL, // LD B, D
-    [0x43] = NULL, // LD B, E
-    [0x44] = NULL, // LD B, H
-    [0x45] = NULL, // LD B, L
-    [0x46] = NULL, // LD B, (HL)
-    [0x47] = NULL, // LD B, A
-    [0x48] = NULL, // LD C, B
-    [0x49] = NULL, // LD C, C
-    [0x4A] = NULL, // LD C, D
-    [0x4B] = NULL, // LD C, E
-    [0x4C] = NULL, // LD C, H
-    [0x4D] = NULL, // LD C, L
-    [0x4E] = NULL, // LD C, (HL)
-    [0x4F] = NULL, // LD C, A
+    [0x40] = LD_b_b, // LD B, B
+    [0x41] = LD_b_c, // LD B, C
+    [0x42] = LD_b_d, // LD B, D
+    [0x43] = LD_b_e, // LD B, E
+    [0x44] = LD_b_h, // LD B, H
+    [0x45] = LD_b_l, // LD B, L
+    [0x46] = LD_b_hl, // LD B, (HL)
+    [0x47] = LD_b_a, // LD B, A
+    [0x48] = LD_c_b, // LD C, B
+    [0x49] = LD_c_c, // LD C, C
+    [0x4A] = LD_c_d, // LD C, D
+    [0x4B] = LD_c_e, // LD C, E
+    [0x4C] = LD_c_h, // LD C, H
+    [0x4D] = LD_c_l, // LD C, L
+    [0x4E] = LD_c_hl, // LD C, (HL)
+    [0x4F] = LD_c_a, // LD C, A
 
     // 0x5_ (The LD D, r block)
-    [0x50] = NULL, // LD D, B
-    [0x51] = NULL, // LD D, C
-    [0x52] = NULL, // LD D, D
-    [0x53] = NULL, // LD D, E
-    [0x54] = NULL, // LD D, H
-    [0x55] = NULL, // LD D, L
-    [0x56] = NULL, // LD D, (HL)
-    [0x57] = NULL, // LD D, A
-    [0x58] = NULL, // LD E, B
-    [0x59] = NULL, // LD E, C
-    [0x5A] = NULL, // LD E, D
-    [0x5B] = NULL, // LD E, E
-    [0x5C] = NULL, // LD E, H
-    [0x5D] = NULL, // LD E, L
-    [0x5E] = NULL, // LD E, (HL)
-    [0x5F] = NULL, // LD E, A
+    [0x50] = LD_d_b, // LD D, B
+    [0x51] = LD_d_c, // LD D, C
+    [0x52] = LD_d_d, // LD D, D
+    [0x53] = LD_d_e, // LD D, E
+    [0x54] = LD_d_h, // LD D, H
+    [0x55] = LD_d_l, // LD D, L
+    [0x56] = LD_d_hl, // LD D, (HL)
+    [0x57] = LD_d_a, // LD D, A
+    [0x58] = LD_e_b, // LD E, B
+    [0x59] = LD_e_c, // LD E, C
+    [0x5A] = LD_e_d, // LD E, D
+    [0x5B] = LD_e_e, // LD E, E
+    [0x5C] = LD_e_h, // LD E, H
+    [0x5D] = LD_e_l, // LD E, L
+    [0x5E] = LD_e_hl, // LD E, (HL)
+    [0x5F] = LD_e_a, // LD E, A
 
     // 0x6_ (The LD H, r block)
-    [0x60] = NULL, // LD H, B
-    [0x61] = NULL, // LD H, C
-    [0x62] = NULL, // LD H, D
-    [0x63] = NULL, // LD H, E
-    [0x64] = NULL, // LD H, H
-    [0x65] = NULL, // LD H, L
-    [0x66] = NULL, // LD H, (HL)
-    [0x67] = NULL, // LD H, A
-    [0x68] = NULL, // LD L, B
-    [0x69] = NULL, // LD L, C
-    [0x6A] = NULL, // LD L, D
-    [0x6B] = NULL, // LD L, E
-    [0x6C] = NULL, // LD L, H
-    [0x6D] = NULL, // LD L, L
-    [0x6E] = NULL, // LD L, (HL)
-    [0x6F] = NULL, // LD L, A
+    [0x60] = LD_h_b, // LD H, B
+    [0x61] = LD_h_c, // LD H, C
+    [0x62] = LD_h_d, // LD H, D
+    [0x63] = LD_h_e, // LD H, E
+    [0x64] = LD_h_h, // LD H, H
+    [0x65] = LD_h_l, // LD H, L
+    [0x66] = LD_h_hl, // LD H, (HL)
+    [0x67] = LD_h_a, // LD H, A
+    [0x68] = LD_l_b, // LD L, B
+    [0x69] = LD_l_c, // LD L, C
+    [0x6A] = LD_l_d, // LD L, D
+    [0x6B] = LD_l_e, // LD L, E
+    [0x6C] = LD_l_h, // LD L, H
+    [0x6D] = LD_l_l, // LD L, L
+    [0x6E] = LD_l_hl, // LD L, (HL)
+    [0x6F] = LD_l_a, // LD L, A
 
     // 0x7_ (The LD (HL), r block)
-    [0x70] = NULL, // LD (HL), B
-    [0x71] = NULL, // LD (HL), C
-    [0x72] = NULL, // LD (HL), D
-    [0x73] = NULL, // LD (HL), E
-    [0x74] = NULL, // LD (HL), H
-    [0x75] = NULL, // LD (HL), L
+    [0x70] = LD_hl_b, // LD (HL), B
+    [0x71] = LD_hl_c, // LD (HL), C
+    [0x72] = LD_hl_d, // LD (HL), D
+    [0x73] = LD_hl_e, // LD (HL), E
+    [0x74] = LD_hl_h, // LD (HL), H
+    [0x75] = LD_hl_l, // LD (HL), L
     [0x76] = NULL, // HALT
-    [0x77] = NULL, // LD (HL), A
-    [0x78] = NULL, // LD A, B
-    [0x79] = NULL, // LD A, C
-    [0x7A] = NULL, // LD A, D
-    [0x7B] = NULL, // LD A, E
-    [0x7C] = NULL, // LD A, H
-    [0x7D] = NULL, // LD A, L
-    [0x7E] = NULL, // LD A, (HL)
-    [0x7F] = NULL, // LD A, A
+    [0x77] = LD_hl_a, // LD (HL), A
+    [0x78] = LD_a_b, // LD A, B
+    [0x79] = LD_a_c, // LD A, C
+    [0x7A] = LD_a_d, // LD A, D
+    [0x7B] = LD_a_e, // LD A, E
+    [0x7C] = LD_a_h, // LD A, H
+    [0x7D] = LD_a_l, // LD A, L
+    [0x7E] = LD_a_hl, // LD A, (HL)
+    [0x7F] = LD_a_a, // LD A, A
 
     // 0x8_ (Arithmetic: ADD / ADC)
     [0x80] = NULL, // ADD A, B
@@ -649,29 +732,6 @@ instruction_ptr prefix_opcode_table[256] = {
     [0xFE] = NULL, // SET 7, (HL)
     [0xFF] = NULL, // SET 7, A
 };
-
-uint8_t read_byte(uint16_t address) {
-    if (address >= 0x0000 && address <= 0x7FFF) {
-        return memory->rom[address];
-    } else if (address >= 0x8000 && address <= 0x9FFF) {
-        return memory->vram[address - 0x8000];
-    } else if (address >= 0xA000 && address <= 0xBFFF) {
-        return memory->external[address - 0xA000];
-    } else if (address >= 0xC000 && address <= 0xDFFF) {
-        return memory->wram[address - 0xC000];
-    } else if (address >= 0xE000 && address <= 0xFDFF) {
-        return memory->wram[address - 0xE000];
-    } else if (address >= 0xFE00 && address <= 0xFE9F) {
-        return memory->oam[address - 0xFE00];
-    } else if (address >= 0xFF00 && address <= 0xFF7F){
-        return memory->io[address - 0xFF4C];
-    } else if (address >= 0xFF80 && address <= 0xFFFE){
-        return memory->hram[address - 0xFF80];
-    } else if (address == 0xFFFF){
-        return memory->ie;
-    }
-    return 0xFF;
-}
 
 void *NOP(){
     
