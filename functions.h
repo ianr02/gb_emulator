@@ -1,6 +1,7 @@
 #ifndef FUNCTIONS_H
 #include "structs.h"
 #include <stdio.h>
+#include <stdlib.h>
 #define FUNCTIONS_H
 
 // load inmediate value into register
@@ -40,6 +41,19 @@ void LD_##reg_name##_nn() { \
     reg->reg_name = read_byte(address); \
 }
 
+// save value from register into memory in [register]
+#define GEN_LD_ADDR_R(reg_addr, reg_name) \
+void SV_##reg_addr##_##reg_name##() { \
+    save_byte(reg->reg_addr, reg->reg_name); \
+}
+
+// save inmediate value into memory in [register]
+#define GEN_LD_ADDR_IMM(reg_addr) \
+void SV_##reg_addr##_n() { \
+    uint8_t val = read_byte(reg->pc++); \
+    save_byte(reg->reg_addr, val); \
+}
+
 uint8_t read_byte(uint16_t address) {
     if (address >= 0x0000 && address <= 0x7FFF) {
         return memory->rom[address];
@@ -61,6 +75,38 @@ uint8_t read_byte(uint16_t address) {
         return memory->ie;
     }
     return 0xFF;
+}
+
+int save_byte(uint16_t address, uint8_t val){
+    if (address >= 0x0000 && address <= 0x7FFF) {
+        memory->rom[address] = val;
+        exit(EXIT_SUCCESS);
+    } else if (address >= 0x8000 && address <= 0x9FFF) {
+        memory->vram[address - 0x8000] = val;
+        exit(EXIT_SUCCESS);
+    } else if (address >= 0xA000 && address <= 0xBFFF) {
+        memory->external[address - 0xA000] = val;
+        exit(EXIT_SUCCESS);
+    } else if (address >= 0xC000 && address <= 0xDFFF) {
+        memory->wram[address - 0xC000] = val;
+        exit(EXIT_SUCCESS);
+    } else if (address >= 0xE000 && address <= 0xFDFF) {
+        memory->wram[address - 0xE000] = val;
+        exit(EXIT_SUCCESS);
+    } else if (address >= 0xFE00 && address <= 0xFE9F) {
+        memory->oam[address - 0xFE00] = val;
+        exit(EXIT_SUCCESS);
+    } else if (address >= 0xFF00 && address <= 0xFF7F){
+        memory->io[address - 0xFF4C] = val;
+        exit(EXIT_SUCCESS);
+    } else if (address >= 0xFF80 && address <= 0xFFFE){
+        memory->hram[address - 0xFF80] = val;
+        exit(EXIT_SUCCESS);
+    } else if (address == 0xFFFF){
+        memory->ie = val;
+        exit(EXIT_SUCCESS);
+    }
+    exit(EXIT_FAILURE);
 }
 
 GEN_REG_BC(a);
@@ -95,7 +141,17 @@ GEN_REG_NN(e);
 GEN_REG_NN(h);
 GEN_REG_NN(l);
 
+GEN_LD_ADDR_R(hl, a);
+GEN_LD_ADDR_R(hl, b);
+GEN_LD_ADDR_R(hl, c);
+GEN_LD_ADDR_R(hl, d);
+GEN_LD_ADDR_R(hl, e);
+GEN_LD_ADDR_R(hl, h);
+GEN_LD_ADDR_R(hl, l);
 
+GEN_LD_ADDR_IMM(hl);
+
+GEN_LD_N(a);
 GEN_LD_N(b);
 GEN_LD_N(c);
 GEN_LD_N(d);
@@ -172,7 +228,7 @@ instruction_ptr opcode_table[256] = {
     [0x07] = NULL, // RLC A
     [0x08] = NULL, // LD (nn), SP
     [0x09] = NULL, // ADD HL, BC
-    [0x0A] = NULL, // LD A, (BC)
+    [0x0A] = LD_a_bc, // LD A, (BC)
     [0x0B] = NULL, // DEC BC
     [0x0C] = NULL, // INC C
     [0x0D] = NULL, // DEC C
@@ -190,7 +246,7 @@ instruction_ptr opcode_table[256] = {
     [0x17] = NULL, // RL A
     [0x18] = NULL, // JR n
     [0x19] = NULL, // ADD HL, DE
-    [0x1A] = NULL, // LD A, (DE)
+    [0x1A] = LD_a_de, // LD A, (DE)
     [0x1B] = NULL, // DEC DE
     [0x1C] = NULL, // INC E
     [0x1D] = NULL, // DEC E
@@ -222,7 +278,7 @@ instruction_ptr opcode_table[256] = {
     [0x33] = NULL, // INC SP
     [0x34] = NULL, // INC (HL)
     [0x35] = NULL, // DEC (HL)
-    [0x36] = NULL, // LD (HL), n
+    [0x36] = SV_hl_n, // LD (HL), n
     [0x37] = NULL, // SCF
     [0x38] = NULL, // JR C, n
     [0x39] = NULL, // ADD HL, SP
@@ -230,7 +286,7 @@ instruction_ptr opcode_table[256] = {
     [0x3B] = NULL, // DEC SP
     [0x3C] = NULL, // INC A
     [0x3D] = NULL, // DEC A
-    [0x3E] = NULL, // LD A, n
+    [0x3E] = LD_a_n, // LD A, n
     [0x3F] = NULL, // CCF
 
     // 0x4_ (The LD B, r block)
@@ -288,14 +344,14 @@ instruction_ptr opcode_table[256] = {
     [0x6F] = LD_l_a, // LD L, A
 
     // 0x7_ (The LD (HL), r block)
-    [0x70] = LD_hl_b, // LD (HL), B
-    [0x71] = LD_hl_c, // LD (HL), C
-    [0x72] = LD_hl_d, // LD (HL), D
-    [0x73] = LD_hl_e, // LD (HL), E
-    [0x74] = LD_hl_h, // LD (HL), H
-    [0x75] = LD_hl_l, // LD (HL), L
+    [0x70] = SV_hl_b, // LD (HL), B
+    [0x71] = SV_hl_c, // LD (HL), C
+    [0x72] = SV_hl_d, // LD (HL), D
+    [0x73] = SV_hl_e, // LD (HL), E
+    [0x74] = SV_hl_h, // LD (HL), H
+    [0x75] = SV_hl_l, // LD (HL), L
     [0x76] = NULL, // HALT
-    [0x77] = LD_hl_a, // LD (HL), A
+    [0x77] = SV_hl_a, // LD (HL), A
     [0x78] = LD_a_b, // LD A, B
     [0x79] = LD_a_c, // LD A, C
     [0x7A] = LD_a_d, // LD A, D
@@ -435,7 +491,7 @@ instruction_ptr opcode_table[256] = {
     [0xF7] = NULL, // RST 30
     [0xF8] = NULL, // LDHL SP, d
     [0xF9] = NULL, // LD SP, HL
-    [0xFA] = NULL, // LD A, (nn)
+    [0xFA] = LD_a_nn, // LD A, (nn)
     [0xFB] = NULL, // EI (Enable Interrupts)
     [0xFC] = NULL, // XX (Invalid)
     [0xFD] = NULL, // XX (Invalid)

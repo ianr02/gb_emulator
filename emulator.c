@@ -1,5 +1,4 @@
 #include "functions.h"
-#include <stdlib.h>
 #include <stdbool.h>
 
 extern GameBoyMemory *memory;
