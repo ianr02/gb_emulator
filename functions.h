@@ -258,7 +258,7 @@ void INC_##reg_name() { \
 void DEC_##reg_name() { \
     reg->f &= 0x10; \
     reg->f |= 0x40; \
-    if((reg->reg_name & 0xF) == 0x0) \ 
+    if((reg->reg_name & 0xF) == 0x0) \
         reg->f |= 0x20; \
     --reg->reg_name; \
     if(reg->reg_name == 0) \
