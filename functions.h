@@ -405,7 +405,7 @@ void SBC_A_hl(){ \
 }
 
 //substract immediate value - carry bit from register a
-void SBC_A_hl(){ \
+void SBC_A_imm(){ \
     uint8_t val = read_byte(reg->pc++); \
     uint8_t carry = (reg->f & 0x40) ? 1 : 0; \
     int16_t result = (int16_t)reg->a - (int16_t)val - carry; \
@@ -1002,7 +1002,7 @@ instruction_ptr opcode_table[256] = {
     [0xDB] = NULL, // XX (Invalid)
     [0xDC] = NULL, // CALL C, nn
     [0xDD] = NULL, // XX (Invalid)
-    [0xDE] = NULL, // SBC A, n
+    [0xDE] = SBC_A_imm, // SBC A, n
     [0xDF] = NULL, // RST 18
 
     // 0xE_
