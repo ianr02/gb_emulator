@@ -213,18 +213,16 @@ void AND_A_##reg_name() { \
 #define GEN_OR_A_REG(reg_name) \
 void OR_A_##reg_name() { \
     reg->f = 0x0; \
-    if (reg->a | reg->reg_name == 0) { \ 
+    if (reg->a | reg->reg_name == 0) \
         reg->f |= 0x80; \
-    } \
     reg->a |= reg->reg_name; \
 }
 
 #define GEN_XOR_A_REG(reg_name) \
 void XOR_A_##reg_name() { \
     reg->f = 0x0; \
-    if (reg->a ^ reg->reg_name == 0) { \ 
+    if (reg->a ^ reg->reg_name == 0) \
         reg->f |= 0x80; \
-    } \
     reg->a ^= reg->reg_name; \
 }
 
