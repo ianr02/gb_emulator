@@ -187,7 +187,6 @@ void SUB_A_##reg_name(){ \
     reg->a = (uint8_t)result; \
 }
 
-
 #define GEN_SBC_A_REG(reg_name) \
 void SBC_A_##reg_name(){ \
     uint8_t val = reg->reg_name; \
@@ -201,6 +200,64 @@ void SBC_A_##reg_name(){ \
     if (result < 0) \
         reg->f |= 0x10; \
     reg->a = (uint8_t)result; \
+}
+
+#define GEN_AND_A_REG(reg_name) \
+void AND_A_##reg_name() { \
+    reg->f = 0x20; \
+    if (reg->a & reg->reg_name == 0) \ 
+        reg->f |= 0x80; \
+    reg->a &= reg->reg_name; \
+}
+
+#define GEN_OR_A_REG(reg_name) \
+void OR_A_##reg_name() { \
+    reg->f = 0x0; \
+    if (reg->a | reg->reg_name == 0) \ 
+        reg->f |= 0x80; \
+    reg->a |= reg->reg_name; \
+}
+
+#define GEN_XOR_A_REG(reg_name) \
+void XOR_A_##reg_name() { \
+    reg->f = 0x0; \
+    if (reg->a ^ reg->reg_name == 0) \ 
+        reg->f |= 0x80; \
+    reg->a ^= reg->reg_name; \
+}
+
+#define GEN_CP_A_REG(reg_name) \
+void CP_A_##reg_name() { \
+    uint8_t val = reg->reg_name; \
+    int16_t result = reg->a - val; \
+    reg->f = 0x40; \
+    if ((result & 0xFF) == 0) \
+        reg->f |= 0x80; \
+    if ((reg->a & 0xF) - (val & 0xF) < 0) \
+        reg->f |= 0x20; \
+    if (result < 0) \
+        reg->f |= 0x10; \
+}
+
+#define GEN_INC_REG(reg_name) \ 
+void INC_##reg_name() { \
+    reg->f &= 0x10; \
+    if((reg->reg_name & 0xF) + 0x01 > 0xF) \
+        reg->f |= 0x20; \
+    ++reg->reg_name;  \
+    if (reg->reg_name == 0) \  
+        reg->f |= 0x80; \
+}
+
+#define GEN_DEC_REG(reg_name) \
+void DEC_##reg_name() { \
+    reg->f &= 0x10; \
+    reg->f |= 0x40; \
+    if((reg->reg_name & 0xF) == 0x0) \ 
+        reg->f |= 0x20; \
+    --reg->reg_name; \
+    if(reg->reg_name == 0) \
+        reg->f |= 0x80; \
 }
 
 void NOP(){
@@ -356,6 +413,159 @@ void SBC_A_hl(){ \
         reg->f |= 0x10; \
     reg->a = (uint8_t)result; \
 }
+
+// AND between register a and value in [hl]
+void AND_A_hl() { 
+    uint8_t val = read_byte(reg->hl);
+    reg->f = 0x20; 
+    if (reg->a & val == 0)  
+        reg->f |= 0x80; 
+    reg->a &= val; 
+}
+
+// AND between register a and immediate value
+void AND_A_n() { 
+    uint8_t val = read_byte(reg->pc++);
+    reg->f = 0x20; 
+    if (reg->a & val == 0)  
+        reg->f |= 0x80; 
+    reg->a &= val; 
+}
+
+// OR between register a and value in [hl]
+void OR_A_hl() { 
+    uint8_t val = read_byte(reg->hl);
+    reg->f = 0x0; 
+    if (reg->a | val == 0) 
+        reg->f |= 0x80; 
+    reg->a |= val;
+}
+
+// OR between register a and immediate value
+void OR_A_n() { 
+    uint8_t val = read_byte(reg->pc++);
+    reg->f = 0x0; 
+    if (reg->a | val == 0) 
+        reg->f |= 0x80; 
+    reg->a |= val;
+}
+
+// XOR between register a and value in [hl]
+void XOR_A_hl() { 
+    uint8_t val = read_byte(reg->hl++);
+    reg->f = 0x0; 
+    if (reg->a ^ val == 0) 
+        reg->f |= 0x80; 
+    reg->a ^= val;
+}
+
+// XOR between register a and immediate value
+void XOR_A_n() { 
+    uint8_t val = read_byte(reg->pc++);
+    reg->f = 0x0; 
+    if (reg->a ^ val == 0) 
+        reg->f |= 0x80; 
+    reg->a ^= val;
+}
+
+// CMP between A and [hl]
+void CP_A_hl() { 
+    uint8_t val = read_byte(reg->hl); 
+    int16_t result = reg->a - val; 
+    reg->f = 0x40; 
+    if ((result & 0xFF) == 0) 
+        reg->f |= 0x80; 
+    if ((reg->a & 0xF) - (val & 0xF) < 0) 
+        reg->f |= 0x20; 
+    if (result < 0) 
+        reg->f |= 0x10; 
+}
+
+// CMP between A and immediate value
+void CP_A_n() { 
+    uint8_t val = read_byte(reg->pc++); 
+    int16_t result = reg->a - val; 
+    reg->f = 0x40; 
+    if ((result & 0xFF) == 0) 
+        reg->f |= 0x80; 
+    if ((reg->a & 0xF) - (val & 0xF) < 0) 
+        reg->f |= 0x20; 
+    if (result < 0) 
+        reg->f |= 0x10; 
+}
+
+// INC value in [hl]
+void INC_hl() { 
+    uint8_t val = read_byte(reg->hl);
+    reg->f &= 0x10; 
+    if((val & 0xF) + 0x01 > 0xF) 
+        reg->f |= 0x20; 
+    ++val;
+    save_byte(reg->hl, val);  
+    if (val == 0) 
+        reg->f |= 0x80; 
+}
+
+// DEC value in [hl]
+void DEC_hl() { 
+    uint8_t val = read_byte(reg->hl);
+    reg->f &= 0x10; 
+    reg->f |= 0x40;
+    if((val & 0xF) == 0x0) 
+        reg->f |= 0x20;
+    --val;
+    if(val == 0)
+        reg->f |= 0x80;
+    save_byte(reg->hl, val);
+}
+
+GEN_CP_A_REG(a);
+GEN_CP_A_REG(b);
+GEN_CP_A_REG(c);
+GEN_CP_A_REG(d);
+GEN_CP_A_REG(e);
+GEN_CP_A_REG(h);
+GEN_CP_A_REG(l);
+
+GEN_DEC_REG(a);
+GEN_DEC_REG(b);
+GEN_DEC_REG(c);
+GEN_DEC_REG(d);
+GEN_DEC_REG(e);
+GEN_DEC_REG(h);
+GEN_DEC_REG(l);
+
+GEN_INC_REG(a);
+GEN_INC_REG(b);
+GEN_INC_REG(c);
+GEN_INC_REG(d);
+GEN_INC_REG(e);
+GEN_INC_REG(l);
+GEN_INC_REG(h);
+
+GEN_XOR_A_REG(a);
+GEN_XOR_A_REG(b);
+GEN_XOR_A_REG(c);
+GEN_XOR_A_REG(d);
+GEN_XOR_A_REG(e);
+GEN_XOR_A_REG(h);
+GEN_XOR_A_REG(l);
+
+GEN_OR_A_REG(a);
+GEN_OR_A_REG(b);
+GEN_OR_A_REG(c);
+GEN_OR_A_REG(d);
+GEN_OR_A_REG(e);
+GEN_OR_A_REG(h);
+GEN_OR_A_REG(l);
+
+GEN_AND_A_REG(a);
+GEN_AND_A_REG(b);
+GEN_AND_A_REG(c);
+GEN_AND_A_REG(d);
+GEN_AND_A_REG(e);
+GEN_AND_A_REG(h);
+GEN_AND_A_REG(l);
 
 GEN_SUB_A_REG(a);
 GEN_SUB_A_REG(b);
@@ -543,16 +753,16 @@ instruction_ptr opcode_table[256] = {
     [0x01] = LD_bc_nn, // LD BC, nn
     [0x02] = SV_bc_a, // LD (BC), A
     [0x03] = NULL, // INC BC
-    [0x04] = NULL, // INC B
-    [0x05] = NULL, // DEC B
+    [0x04] = INC_b, // INC B
+    [0x05] = DEC_b, // DEC B
     [0x06] = LD_b_n, // LD B, n
     [0x07] = NULL, // RLC A
     [0x08] = SV_nn_sp, // LD (nn), SP
     [0x09] = NULL, // ADD HL, BC
     [0x0A] = LD_a_bc, // LD A, (BC)
     [0x0B] = NULL, // DEC BC
-    [0x0C] = NULL, // INC C
-    [0x0D] = NULL, // DEC C
+    [0x0C] = INC_c, // INC C
+    [0x0D] = DEC_c, // DEC C
     [0x0E] = LD_c_n, // LD C, n
     [0x0F] = NULL, // RRC A
 
@@ -561,16 +771,16 @@ instruction_ptr opcode_table[256] = {
     [0x11] = LD_de_nn, // LD DE, nn
     [0x12] = SV_de_a, // LD (DE), A
     [0x13] = NULL, // INC DE
-    [0x14] = NULL, // INC D
-    [0x15] = NULL, // DEC D
+    [0x14] = INC_d, // INC D
+    [0x15] = DEC_d, // DEC D
     [0x16] = LD_d_n, // LD D, n
     [0x17] = NULL, // RL A
     [0x18] = NULL, // JR n
     [0x19] = NULL, // ADD HL, DE
     [0x1A] = LD_a_de, // LD A, (DE)
     [0x1B] = NULL, // DEC DE
-    [0x1C] = NULL, // INC E
-    [0x1D] = NULL, // DEC E
+    [0x1C] = INC_e, // INC E
+    [0x1D] = DEC_e, // DEC E
     [0x1E] = LD_e_n, // LD E, n
     [0x1F] = NULL, // RR A
 
@@ -579,16 +789,16 @@ instruction_ptr opcode_table[256] = {
     [0x21] = LD_hl_nn, // LD HL, nn
     [0x22] = LDI_hl_a, // LDI (HL), A
     [0x23] = NULL, // INC HL
-    [0x24] = NULL, // INC H
-    [0x25] = NULL, // DEC H
+    [0x24] = INC_h, // INC H
+    [0x25] = DEC_h, // DEC H
     [0x26] = LD_h_n, // LD H, n
     [0x27] = NULL, // DAA
     [0x28] = NULL, // JR Z, n
     [0x29] = NULL, // ADD HL, HL
     [0x2A] = NULL, // LDI A, (HL)
     [0x2B] = NULL, // DEC HL
-    [0x2C] = NULL, // INC L
-    [0x2D] = NULL, // DEC L
+    [0x2C] = INC_l, // INC L
+    [0x2D] = DEC_l, // DEC L
     [0x2E] = LD_l_n, // LD L, n
     [0x2F] = NULL, // CPL
 
@@ -597,8 +807,8 @@ instruction_ptr opcode_table[256] = {
     [0x31] = LD_sp_nn, // LD SP, nn
     [0x32] = NULL, // LDD (HL), A
     [0x33] = NULL, // INC SP
-    [0x34] = NULL, // INC (HL)
-    [0x35] = NULL, // DEC (HL)
+    [0x34] = INC_hl, // INC (HL)
+    [0x35] = DEC_hl, // DEC (HL)
     [0x36] = SV_hl_n, // LD (HL), n
     [0x37] = NULL, // SCF
     [0x38] = NULL, // JR C, n
@@ -701,51 +911,58 @@ instruction_ptr opcode_table[256] = {
     [0x8F] = ADC_A_a, // ADC A, A
 
     // 0x9_ (Arithmetic: SUB / SBC)
-    [0x90] = NULL, // SUB A, B
-    [0x91] = NULL, // SUB A, C
-    [0x92] = NULL, // SUB A, D
-    [0x93] = NULL, // SUB A, E
-    [0x94] = NULL, // SUB A, H
-    [0x95] = NULL, // SUB A, L
-    [0x96] = NULL, // SUB A, (HL)
-    [0x97] = NULL, // SUB A, A
-    [0x98] = NULL, // SBC
+    [0x90] = SUB_A_b, // SUB A, B
+    [0x91] = SUB_A_c, // SUB A, C
+    [0x92] = SUB_A_d, // SUB A, D
+    [0x93] = SUB_A_e, // SUB A, E
+    [0x94] = SUB_A_h, // SUB A, H
+    [0x95] = SUB_A_l, // SUB A, L
+    [0x96] = SUB_A_hl, // SUB A, (HL)
+    [0x97] = SUB_A_a, // SUB A, A
+    [0x98] = SBC_A_b, // SBC
+    [0x99] = SBC_A_c,
+    [0x9A] = SBC_A_d,
+    [0X9B] = SBC_A_e,
+    [0x9C] = SBC_A_h,
+    [0x9D] = SBC_A_l,
+    [0x9E] = SBC_A_hl,
+    [0x9F] = SBC_A_a,
 
     // 0xA_ (Logic: AND / XOR)
-    [0xA0] = NULL, // AND B
-    [0xA1] = NULL, // AND C
-    [0xA2] = NULL, // AND D
-    [0xA3] = NULL, // AND E
-    [0xA4] = NULL, // AND H
-    [0xA5] = NULL, // AND L
-    [0xA6] = NULL, // AND (HL)
-    [0xA7] = NULL, // AND A
-    [0xA8] = NULL, // XOR B
-    [0xA9] = NULL, // XOR C
-    [0xAA] = NULL, // XOR D
-    [0xAB] = NULL, // XOR E
-    [0xAC] = NULL, // XOR H
-    [0xAD] = NULL, // XOR L
-    [0xAE] = NULL, // XOR (HL)
-    [0xAF] = NULL, // XOR A
+    [0xA0] = AND_A_b, // AND B
+    [0xA1] = AND_A_c, // AND C
+    [0xA2] = AND_A_d, // AND D
+    [0xA3] = AND_A_e, // AND E
+    [0xA4] = AND_A_h, // AND H
+    [0xA5] = AND_A_l, // AND L
+    [0xA6] = AND_A_hl, // AND (HL)
+    [0xA7] = AND_A_a, // AND A
+    [0xA8] = XOR_A_b, // XOR B
+    [0xA9] = XOR_A_c, // XOR C
+    [0xAA] = XOR_A_d, // XOR D
+    [0xAB] = XOR_A_e, // XOR E
+    [0xAC] = XOR_A_h, // XOR H
+    [0xAD] = XOR_A_l, // XOR L
+    [0xAE] = XOR_A_hl, // XOR (HL)
+    [0xAF] = XOR_A_a, // XOR A
 
     // 0xB_ (Logic: OR / CP)
-    [0xB0] = NULL, // OR B
-    [0xB1] = NULL, // OR C
-    [0xB2] = NULL, // OR D
-    [0xB3] = NULL, // OR E
-    [0xB4] = NULL, // OR H
-    [0xB5] = NULL, // OR L
-    [0xB6] = NULL, // OR (HL)
-    [0xB7] = NULL, // OR A
-    [0xB8] = NULL, // CP B
-    [0xB9] = NULL, // CP C
-    [0xBA] = NULL, // CP D
-    [0xBB] = NULL, // CP E
-    [0xBC] = NULL, // CP H
-    [0xBD] = NULL, // CP L
-    [0xBE] = NULL, // CP (HL)
-    [0xBF] = NULL, // CP A
+    [0xB0] = OR_A_b, // OR B
+    [0xB1] = OR_A_c, // OR C
+    [0xB2] = OR_A_d, // OR D
+    [0xB3] = OR_A_e, // OR E
+    [0xB4] = OR_A_h, // OR H
+    [0xB5] = OR_A_l, // OR L
+    [0xB6] = OR_A_hl, // OR (HL)
+    [0xB7] = OR_A_a, // OR A
+    [0xB8] = CP_A_b, // CP B
+    [0xB9] = CP_A_c, // CP C
+    [0xBA] = CP_A_d, // CP D
+    [0xBB] = CP_A_e, // CP E
+    [0xBC] = CP_A_h, // CP H
+    [0xBD] = CP_A_l, // CP L
+    [0xBE] = CP_A_hl, // CP (HL)
+    [0xBF] = CP_A_a, // CP A
 
     // 0xC_ (Control Flow / Stack)
     [0xC0] = NULL, // RET NZ
@@ -772,7 +989,7 @@ instruction_ptr opcode_table[256] = {
     [0xD3] = NULL, // XX (Invalid)
     [0xD4] = NULL, // CALL NC, nn
     [0xD5] = PUSH_de, // PUSH DE
-    [0xD6] = NULL, // SUB A, n
+    [0xD6] = SUB_A_n, // SUB A, n
     [0xD7] = NULL, // RST 10
     [0xD8] = NULL, // RET C
     [0xD9] = NULL, // RETI
@@ -790,7 +1007,7 @@ instruction_ptr opcode_table[256] = {
     [0xE3] = NULL, // XX (Invalid)
     [0xE4] = NULL, // XX (Invalid)
     [0xE5] = PUSH_hl, // PUSH HL
-    [0xE6] = NULL, // AND n
+    [0xE6] = AND_A_n, // AND n
     [0xE7] = NULL, // RST 20
     [0xE8] = NULL, // ADD SP, d
     [0xE9] = NULL, // JP (HL)
@@ -798,7 +1015,7 @@ instruction_ptr opcode_table[256] = {
     [0xEB] = NULL, // XX (Invalid)
     [0xEC] = NULL, // XX (Invalid)
     [0xED] = NULL, // XX (Invalid)
-    [0xEE] = NULL, // XOR n
+    [0xEE] = XOR_A_n, // XOR n
     [0xEF] = NULL, // RST 28
 
     // 0xF_
@@ -808,7 +1025,7 @@ instruction_ptr opcode_table[256] = {
     [0xF3] = NULL, // DI (Disable Interrupts)
     [0xF4] = NULL, // XX (Invalid)
     [0xF5] = PUSH_af, // PUSH AF
-    [0xF6] = NULL, // OR n
+    [0xF6] = OR_A_n, // OR n
     [0xF7] = NULL, // RST 30
     [0xF8] = NULL, // LDHL SP, d
     [0xF9] = LD_sp_hl, // LD SP, HL
@@ -816,7 +1033,7 @@ instruction_ptr opcode_table[256] = {
     [0xFB] = NULL, // EI (Enable Interrupts)
     [0xFC] = NULL, // XX (Invalid)
     [0xFD] = NULL, // XX (Invalid)
-    [0xFE] = NULL, // CP n
+    [0xFE] = CP_A_n, // CP n
     [0xFF] = NULL, // RST 38
 };
 

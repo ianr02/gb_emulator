@@ -43,5 +43,8 @@ int main(int argc, char *argv[]) {
             }
         }
     }
+    fclose(file);
+    free(memory);
+    free(reg);
     exit(EXIT_SUCCESS);
 }
