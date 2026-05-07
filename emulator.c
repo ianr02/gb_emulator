@@ -39,9 +39,9 @@ int main(int argc, char *argv[]) {
                 opcode_table[opcode]();
             } else {
                 printf("Error: Unimplemented Opcode 0x%02X at 0x%04X\n", opcode, reg->pc - 1);
-                break;
+                exit(EXIT_FAILURE);
             }
         }
     }
-    exit(0);
+    exit(EXIT_SUCCESS);
 }
