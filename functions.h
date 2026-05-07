@@ -54,6 +54,38 @@ void SV_##reg_addr##_n() { \
     save_byte(reg->reg_addr, val); \
 }
 
+// load form value in reg2 + 0xFF00 ($FF00) into reg1
+#define GEN_LD_REG_REG(reg1, reg2) \
+void SLD_##reg1##_##reg2##() { \
+    reg->reg1 = 0xFF00 |reg->reg2; \
+}
+
+// save form value in reg1 into [reg2 + 0xFF00 ($FF00)]
+#define GEN_SV_REG_REG(reg1, reg2) \
+void SLD_##reg1##_##reg2##() { \
+    save_byte(0xFF00 | reg->reg2, reg->reg1); \
+}
+
+void NOP(){
+    
+}
+
+// Load value from A into memory in [HL], then increment HL
+void LDI_hl_a(){
+    write_byte(reg->hl, reg->a);
+    reg->hl++;
+}
+
+void SVH_imm_a(){
+    uint8_t address = 0xFF00 | read_byte(reg->pc++);
+    save_byte(address, reg->a);
+}
+
+void LDH_imm_a(){
+    uint8_t address = 0xFF00 | read_byte(reg->pc++);
+    reg->a = read_byte(address);
+}
+
 uint8_t read_byte(uint16_t address) {
     if (address >= 0x0000 && address <= 0x7FFF) {
         return memory->rom[address];
@@ -141,6 +173,9 @@ GEN_REG_NN(e);
 GEN_REG_NN(h);
 GEN_REG_NN(l);
 
+GEN_LD_REG_REG(a, c);
+GEN_SV_REG_REG(c, a);
+
 GEN_LD_ADDR_R(hl, a);
 GEN_LD_ADDR_R(hl, b);
 GEN_LD_ADDR_R(hl, c);
@@ -148,8 +183,31 @@ GEN_LD_ADDR_R(hl, d);
 GEN_LD_ADDR_R(hl, e);
 GEN_LD_ADDR_R(hl, h);
 GEN_LD_ADDR_R(hl, l);
+GEN_LD_ADDR_R(bc, a);
+GEN_LD_ADDR_R(bc, b);
+GEN_LD_ADDR_R(bc, c);
+GEN_LD_ADDR_R(bc, d);
+GEN_LD_ADDR_R(bc, e);
+GEN_LD_ADDR_R(bc, h);
+GEN_LD_ADDR_R(bc, l);
+GEN_LD_ADDR_R(de, a);
+GEN_LD_ADDR_R(de, b);
+GEN_LD_ADDR_R(de, c);
+GEN_LD_ADDR_R(de, d);
+GEN_LD_ADDR_R(de, e);
+GEN_LD_ADDR_R(de, h);
+GEN_LD_ADDR_R(de, l);
 
 GEN_LD_ADDR_IMM(hl);
+GEN_LD_ADDR_IMM(bc);
+GEN_LD_ADDR_IMM(de);
+GEN_LD_ADDR_IMM(a);
+GEN_LD_ADDR_IMM(b);
+GEN_LD_ADDR_IMM(c); 
+GEN_LD_ADDR_IMM(d);
+GEN_LD_ADDR_IMM(e);
+GEN_LD_ADDR_IMM(h);
+GEN_LD_ADDR_IMM(l);
 
 GEN_LD_N(a);
 GEN_LD_N(b);
@@ -220,7 +278,7 @@ instruction_ptr opcode_table[256] = {
     // 0x0_
     [0x00] = NOP, // NOP
     [0x01] = NULL, // LD BC, nn
-    [0x02] = NULL, // LD (BC), A
+    [0x02] = SV_bc_a, // LD (BC), A
     [0x03] = NULL, // INC BC
     [0x04] = NULL, // INC B
     [0x05] = NULL, // DEC B
@@ -238,7 +296,7 @@ instruction_ptr opcode_table[256] = {
     // 0x1_
     [0x10] = NULL, // STOP
     [0x11] = NULL, // LD DE, nn
-    [0x12] = NULL, // LD (DE), A
+    [0x12] = SV_de_a, // LD (DE), A
     [0x13] = NULL, // INC DE
     [0x14] = NULL, // INC D
     [0x15] = NULL, // DEC D
@@ -256,7 +314,7 @@ instruction_ptr opcode_table[256] = {
     // 0x2_
     [0x20] = NULL, // JR NZ, n
     [0x21] = NULL, // LD HL, nn
-    [0x22] = NULL, // LDI (HL), A
+    [0x22] = LDI_hl_a, // LDI (HL), A
     [0x23] = NULL, // INC HL
     [0x24] = NULL, // INC H
     [0x25] = NULL, // DEC H
@@ -463,9 +521,9 @@ instruction_ptr opcode_table[256] = {
     [0xDF] = NULL, // RST 18
 
     // 0xE_
-    [0xE0] = NULL, // LDH (n), A
+    [0xE0] = SVH_imm_a, // LDH (n), A
     [0xE1] = NULL, // POP HL
-    [0xE2] = NULL, // LDH (C), A
+    [0xE2] = SLD_c_a, // LDH (C), A
     [0xE3] = NULL, // XX (Invalid)
     [0xE4] = NULL, // XX (Invalid)
     [0xE5] = NULL, // PUSH HL
@@ -473,7 +531,7 @@ instruction_ptr opcode_table[256] = {
     [0xE7] = NULL, // RST 20
     [0xE8] = NULL, // ADD SP, d
     [0xE9] = NULL, // JP (HL)
-    [0xEA] = NULL, // LD (nn), A
+    [0xEA] = SV_a_n, // LD (nn), A
     [0xEB] = NULL, // XX (Invalid)
     [0xEC] = NULL, // XX (Invalid)
     [0xED] = NULL, // XX (Invalid)
@@ -481,9 +539,9 @@ instruction_ptr opcode_table[256] = {
     [0xEF] = NULL, // RST 28
 
     // 0xF_
-    [0xF0] = NULL, // LDH A, (n)
+    [0xF0] = LDH_imm_a, // LDH A, (n)
     [0xF1] = NULL, // POP AF
-    [0xF2] = NULL, // XX (Invalid)
+    [0xF2] = SLD_a_c, // LDH A, [C] 
     [0xF3] = NULL, // DI (Disable Interrupts)
     [0xF4] = NULL, // XX (Invalid)
     [0xF5] = NULL, // PUSH AF
@@ -788,9 +846,5 @@ instruction_ptr prefix_opcode_table[256] = {
     [0xFE] = NULL, // SET 7, (HL)
     [0xFF] = NULL, // SET 7, A
 };
-
-void *NOP(){
-    
-}
 
 #endif
