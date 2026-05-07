@@ -132,6 +132,77 @@ void LD_##reg_name##_nn() { \
     reg->reg_name = value; \
 }
 
+// Push register onto the stack, decrementing SP by 2
+#define PUSH_REG16(reg_name) \
+void PUSH_##reg_name() { \
+    save_byte(--reg->sp, (reg->reg_name >> 8) & 0xFF); \
+    save_byte(--reg->sp, reg->reg_name & 0xFF); \
+}
+
+#define POP_REG16(reg_name) \
+void POP_##reg_name() { \
+    reg->reg_name = read_byte(reg->sp++) | (read_byte(reg->sp++) << 8); \
+}
+
+#define GEN_ADD_A_REG(reg_name) \
+void ADD_A_##reg_name(){ \
+    uint8_t val = reg->reg_name; \
+    uint16_t result = reg->a + val; \
+    reg->f = 0; \
+    if ((result & 0xFF) == 0) \
+        reg->f |= 0x80; \
+    if (((reg->a & 0x0F) + (val & 0x0F)) > 0xF) \
+        reg->f |= 0x20; \
+    if (result > 0xFF) \
+        reg->f |= 0x10; \
+    reg->a = (uint8_t)result; \
+}
+
+#define GEN_ADC_A_REG(reg_name) \
+void ADC_A_##reg_name(){ \
+    uint8_t val = reg->reg_name; \
+    uint8_t carry = (reg->f & 0x10) ? 1 : 0; \
+    uint16_t result = reg->a + val + carry; \
+    reg->f = 0; \
+    if ((result & 0xFF) == 0) \
+        reg->f |= 0x80; \
+    if (((reg->a & 0x0F) + (val & 0x0F) + carry) > 0xF) \
+        reg->f |= 0x20; \
+    if (result > 0xFF) \
+        reg->f |= 0x10; \
+    reg->a = (uint8_t)result; \
+}
+
+#define GEN_SUB_A_REG(reg_name) \
+void SUB_A_##reg_name(){ \
+    uint8_t val = reg->reg_name; \
+    int16_t result = (int16_t)reg->a - (int16_t)val; \
+    reg->f = 0x40; \
+    if ((result & 0xFF) == 0) \
+        reg->f |= 0x80; \
+    if (((reg->a & 0x0F) - (val & 0x0F)) < 0) \
+        reg->f |= 0x20; \
+    if (result < 0) \
+        reg->f |= 0x10; \
+    reg->a = (uint8_t)result; \
+}
+
+
+#define GEN_SBC_A_REG(reg_name) \
+void SBC_A_##reg_name(){ \
+    uint8_t val = reg->reg_name; \
+    uint8_t carry = (reg->f & 0x40) ? 1 : 0; \
+    int16_t result = (int16_t)reg->a - (int16_t)val - carry; \
+    reg->f = 0x40; \
+    if ((result & 0xFF) == 0) \
+        reg->f |= 0x80; \
+    if (((reg->a & 0x0F) - (val & 0x0F)) < 0) \
+        reg->f |= 0x20; \
+    if (result < 0) \
+        reg->f |= 0x10; \
+    reg->a = (uint8_t)result; \
+}
+
 void NOP(){
     
 }
@@ -157,6 +228,12 @@ void LDH_imm_a(){
 // Save value in HL, being value of SP + n, where n is an 8 bit signed immediate value
 void LDHL_sp_n(){
     int8_t n = read_byte(reg->pc++);
+    reg->f = 0x0;
+    if ((reg->sp & 0xF) + ((uint8_t)n & 0xF) > 0xF)
+        reg->f |= 0x20; // half-carry for bits 3,4
+    if (((reg->sp & 0xFF) + (uint8_t)n) > (0xFF))
+        reg->f |= 0x10; // carry for bits 6,7
+    
     reg->hl = reg->sp + n;
 }
 
@@ -165,6 +242,162 @@ void SV_nn_sp(){
     uint16_t address = read_byte(reg->pc++) | (read_byte(reg->pc++) << 8);
     save_byte(address, reg->sp);
 }
+
+// Add to register a value from [hl]
+void ADD_A_hl(){
+    uint8_t val = read_byte(reg->hl);
+    uint16_t result = reg->a + val;
+    if ((result & 0xFF) == 0) \
+        reg->f |= 0x80; \
+    if (((reg->a & 0x0F) + (val & 0x0F)) > 0xF) \
+        reg->f |= 0x20; \
+    if (result > 0xFF) \
+        reg->f |= 0x10; \
+    reg->a = (uint8_t) result; \
+}
+
+// Add to register an immediate value
+void ADD_A_n(){
+    uint8_t val = read_byte(reg->pc++);
+    uint16_t result = reg->a + val;
+    if ((result & 0xFF) == 0) \
+        reg->f |= 0x80; \
+    if (((reg->a & 0x0F) + (val & 0x0F)) > 0xF) \
+        reg->f |= 0x20; \
+    if (result > 0xFF) \
+        reg->f |= 0x10; \
+    reg->a = (uint8_t) result; \
+}
+
+// Add to register value from [hl] + carry bit
+void ADC_A_hl(){ 
+    uint8_t val = read_byte(reg->hl); 
+    uint8_t carry = (reg->f & 0x10) ? 1 : 0; 
+    uint16_t result = reg->a + val + carry; 
+    reg->f = 0; 
+    if ((result & 0xFF) == 0) 
+        reg->f |= 0x80; 
+    if (((reg->a & 0x0F) + (val & 0x0F) + carry) > 0xF) 
+        reg->f |= 0x20; 
+    if (result > 0xFF) 
+        reg->f |= 0x10; 
+    reg->a = (uint8_t)result; 
+}
+
+// Add to register an immediate value + carry bit
+void ADC_A_n(){ 
+    uint8_t val = read_byte(reg->pc++); 
+    uint8_t carry = (reg->f & 0x10) ? 1 : 0; 
+    uint16_t result = reg->a + val + carry; 
+    reg->f = 0; 
+    if ((result & 0xFF) == 0) 
+        reg->f |= 0x80; 
+    if (((reg->a & 0x0F) + (val & 0x0F) + carry) > 0xF) 
+        reg->f |= 0x20; 
+    if (result > 0xFF) 
+        reg->f |= 0x10; 
+    reg->a = (uint8_t)result; 
+}
+
+// substract [hl] from a
+void SUB_A_hl(){ 
+    uint8_t val = read_byte(reg->hl); 
+    int16_t result = (int16_t)reg->a - (int16_t)val; 
+    reg->f = 0x40; 
+    if ((result & 0xFF) == 0) 
+        reg->f |= 0x80; 
+    if (((reg->a & 0x0F) - (val & 0x0F)) < 0) 
+        reg->f |= 0x20; 
+    if (result < 0) 
+        reg->f |= 0x10; 
+    reg->a = (uint8_t)result; 
+}
+
+// substract n from a
+void SUB_A_n(){ 
+    uint8_t val = read_byte(reg->pc++); 
+    int16_t result = (int16_t)reg->a - (int16_t)val; 
+    reg->f = 0x40; 
+    if ((result & 0xFF) == 0) 
+        reg->f |= 0x80; 
+    if (((reg->a & 0x0F) - (val & 0x0F)) < 0) 
+        reg->f |= 0x20; 
+    if (result < 0) 
+        reg->f |= 0x10; 
+    reg->a = (uint8_t)result; 
+}
+
+// substract [hl] - carry bit from register a
+void SBC_A_hl(){ \
+    uint8_t val = read_byte(reg->hl); \
+    uint8_t carry = (reg->f & 0x40) ? 1 : 0; \
+    int16_t result = (int16_t)reg->a - (int16_t)val - carry; \
+    reg->f = 0x40; \
+    if ((result & 0xFF) == 0) \
+        reg->f |= 0x80; \
+    if (((reg->a & 0x0F) - (val & 0x0F)) < 0) \
+        reg->f |= 0x20; \
+    if (result < 0) \
+        reg->f |= 0x10; \
+    reg->a = (uint8_t)result; \
+}
+
+//substract immediate value - carry bit from register a
+void SBC_A_hl(){ \
+    uint8_t val = read_byte(reg->pc++); \
+    uint8_t carry = (reg->f & 0x40) ? 1 : 0; \
+    int16_t result = (int16_t)reg->a - (int16_t)val - carry; \
+    reg->f = 0x40; \
+    if ((result & 0xFF) == 0) \
+        reg->f |= 0x80; \
+    if (((reg->a & 0x0F) - (val & 0x0F)) < 0) \
+        reg->f |= 0x20; \
+    if (result < 0) \
+        reg->f |= 0x10; \
+    reg->a = (uint8_t)result; \
+}
+
+GEN_SUB_A_REG(a);
+GEN_SUB_A_REG(b);
+GEN_SUB_A_REG(c);
+GEN_SUB_A_REG(d);
+GEN_SUB_A_REG(e);
+GEN_SUB_A_REG(h);
+GEN_SUB_A_REG(l);
+
+GEN_SBC_A_REG(a);
+GEN_SBC_A_REG(b);
+GEN_SBC_A_REG(c);
+GEN_SBC_A_REG(d);
+GEN_SBC_A_REG(e);
+GEN_SBC_A_REG(h);
+GEN_SBC_A_REG(l);
+
+GEN_ADD_A_REG(a);
+GEN_ADD_A_REG(b);
+GEN_ADD_A_REG(c);
+GEN_ADD_A_REG(d);
+GEN_ADD_A_REG(e);
+GEN_ADD_A_REG(h);
+GEN_ADD_A_REG(l);
+
+GEN_ADC_A_REG(a);
+GEN_ADC_A_REG(b);
+GEN_ADC_A_REG(c);
+GEN_ADC_A_REG(d);
+GEN_ADC_A_REG(e);
+GEN_ADC_A_REG(h);
+GEN_ADC_A_REG(l);
+
+PUSH_REG16(af);
+PUSH_REG16(bc);
+PUSH_REG16(de);
+PUSH_REG16(hl);
+
+POP_REG16(af);
+POP_REG16(bc);
+POP_REG16(de);
+POP_REG16(hl);
 
 GEN_REG_BC(a);
 GEN_REG_BC(b);
@@ -450,22 +683,22 @@ instruction_ptr opcode_table[256] = {
     [0x7F] = LD_a_a, // LD A, A
 
     // 0x8_ (Arithmetic: ADD / ADC)
-    [0x80] = NULL, // ADD A, B
-    [0x81] = NULL, // ADD A, C
-    [0x82] = NULL, // ADD A, D
-    [0x83] = NULL, // ADD A, E
-    [0x84] = NULL, // ADD A, H
-    [0x85] = NULL, // ADD A, L
-    [0x86] = NULL, // ADD A, (HL)
-    [0x87] = NULL, // ADD A, A
-    [0x88] = NULL, // ADC A, B
-    [0x89] = NULL, // ADC A, C
-    [0x8A] = NULL, // ADC A, D
-    [0x8B] = NULL, // ADC A, E
-    [0x8C] = NULL, // ADC A, H
-    [0x8D] = NULL, // ADC A, L
-    [0x8E] = NULL, // ADC A, (HL)
-    [0x8F] = NULL, // ADC A, A
+    [0x80] = ADD_A_b, // ADD A, B
+    [0x81] = ADD_A_c, // ADD A, C
+    [0x82] = ADD_A_d, // ADD A, D
+    [0x83] = ADD_A_e, // ADD A, E
+    [0x84] = ADD_A_h, // ADD A, H
+    [0x85] = ADD_A_l, // ADD A, L
+    [0x86] = ADD_A_hl, // ADD A, (HL)
+    [0x87] = ADD_A_a, // ADD A, A
+    [0x88] = ADC_A_b, // ADC A, B
+    [0x89] = ADC_A_c, // ADC A, C
+    [0x8A] = ADC_A_d, // ADC A, D
+    [0x8B] = ADC_A_e, // ADC A, E
+    [0x8C] = ADC_A_h, // ADC A, H
+    [0x8D] = ADC_A_l, // ADC A, L
+    [0x8E] = ADC_A_hl, // ADC A, (HL)
+    [0x8F] = ADC_A_a, // ADC A, A
 
     // 0x9_ (Arithmetic: SUB / SBC)
     [0x90] = NULL, // SUB A, B
@@ -516,12 +749,12 @@ instruction_ptr opcode_table[256] = {
 
     // 0xC_ (Control Flow / Stack)
     [0xC0] = NULL, // RET NZ
-    [0xC1] = NULL, // POP BC
+    [0xC1] = POP_bc, // POP BC
     [0xC2] = NULL, // JP NZ, nn
     [0xC3] = NULL, // JP nn
     [0xC4] = NULL, // CALL NZ, nn
-    [0xC5] = NULL, // PUSH BC
-    [0xC6] = NULL, // ADD A, n
+    [0xC5] = PUSH_bc, // PUSH BC
+    [0xC6] = ADD_A_n, // ADD A, n
     [0xC7] = NULL, // RST 0
     [0xC8] = NULL, // RET Z
     [0xC9] = NULL, // RET
@@ -529,16 +762,16 @@ instruction_ptr opcode_table[256] = {
     [0xCB] = NULL, // Ext ops (Prefix CB)
     [0xCC] = NULL, // CALL Z, nn
     [0xCD] = NULL, // CALL nn
-    [0xCE] = NULL, // ADC A, n
+    [0xCE] = ADC_A_n, // ADC A, n
     [0xCF] = NULL, // RST 8
 
     // 0xD_
     [0xD0] = NULL, // RET NC
-    [0xD1] = NULL, // POP DE
+    [0xD1] = POP_de, // POP DE
     [0xD2] = NULL, // JP NC, nn
     [0xD3] = NULL, // XX (Invalid)
     [0xD4] = NULL, // CALL NC, nn
-    [0xD5] = NULL, // PUSH DE
+    [0xD5] = PUSH_de, // PUSH DE
     [0xD6] = NULL, // SUB A, n
     [0xD7] = NULL, // RST 10
     [0xD8] = NULL, // RET C
@@ -552,11 +785,11 @@ instruction_ptr opcode_table[256] = {
 
     // 0xE_
     [0xE0] = SVH_imm_a, // LDH (n), A
-    [0xE1] = NULL, // POP HL
+    [0xE1] = POP_hl, // POP HL
     [0xE2] = SLD_c_a, // LDH (C), A
     [0xE3] = NULL, // XX (Invalid)
     [0xE4] = NULL, // XX (Invalid)
-    [0xE5] = NULL, // PUSH HL
+    [0xE5] = PUSH_hl, // PUSH HL
     [0xE6] = NULL, // AND n
     [0xE7] = NULL, // RST 20
     [0xE8] = NULL, // ADD SP, d
@@ -570,11 +803,11 @@ instruction_ptr opcode_table[256] = {
 
     // 0xF_
     [0xF0] = LDH_imm_a, // LDH A, (n)
-    [0xF1] = NULL, // POP AF
+    [0xF1] = POP_af , // POP AF
     [0xF2] = SLD_a_c, // LDH A, [C] 
     [0xF3] = NULL, // DI (Disable Interrupts)
     [0xF4] = NULL, // XX (Invalid)
-    [0xF5] = NULL, // PUSH AF
+    [0xF5] = PUSH_af, // PUSH AF
     [0xF6] = NULL, // OR n
     [0xF7] = NULL, // RST 30
     [0xF8] = NULL, // LDHL SP, d
