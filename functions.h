@@ -205,24 +205,27 @@ void SBC_A_##reg_name(){ \
 #define GEN_AND_A_REG(reg_name) \
 void AND_A_##reg_name() { \
     reg->f = 0x20; \
-    if (reg->a & reg->reg_name == 0) \ 
+    if (reg->a & reg->reg_name == 0) { \ 
         reg->f |= 0x80; \
+    } \
     reg->a &= reg->reg_name; \
 }
 
 #define GEN_OR_A_REG(reg_name) \
 void OR_A_##reg_name() { \
     reg->f = 0x0; \
-    if (reg->a | reg->reg_name == 0) \ 
+    if (reg->a | reg->reg_name == 0) { \ 
         reg->f |= 0x80; \
+    } \
     reg->a |= reg->reg_name; \
 }
 
 #define GEN_XOR_A_REG(reg_name) \
 void XOR_A_##reg_name() { \
     reg->f = 0x0; \
-    if (reg->a ^ reg->reg_name == 0) \ 
+    if (reg->a ^ reg->reg_name == 0) { \ 
         reg->f |= 0x80; \
+    } \
     reg->a ^= reg->reg_name; \
 }
 
@@ -231,22 +234,27 @@ void CP_A_##reg_name() { \
     uint8_t val = reg->reg_name; \
     int16_t result = reg->a - val; \
     reg->f = 0x40; \
-    if ((result & 0xFF) == 0) \
+    if ((result & 0xFF) == 0) { \
         reg->f |= 0x80; \
-    if ((reg->a & 0xF) - (val & 0xF) < 0) \
+    } \
+    if ((reg->a & 0xF) - (val & 0xF) < 0) { \
         reg->f |= 0x20; \
-    if (result < 0) \
+    } \
+    if (result < 0) { \
         reg->f |= 0x10; \
+    } \
 }
 
 #define GEN_INC_REG(reg_name) \ 
 void INC_##reg_name() { \
     reg->f &= 0x10; \
-    if((reg->reg_name & 0xF) + 0x01 > 0xF) \
+    if((reg->reg_name & 0xF) + 0x01 > 0xF) { \
         reg->f |= 0x20; \
+    } \
     ++reg->reg_name;  \
-    if (reg->reg_name == 0) \  
+    if (reg->reg_name == 0) { \  
         reg->f |= 0x80; \
+    } \
 }
 
 #define GEN_DEC_REG(reg_name) \
