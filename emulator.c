@@ -1,8 +1,8 @@
 #include "functions.h"
 #include <stdbool.h>
 
-extern GameBoyMemory *memory;
-extern registers *reg;
+GameBoyMemory *memory;
+registers *reg;
 
 int main(int argc, char *argv[]) {
     memory = malloc(GAMEBOY_MEMORY_SIZE);
