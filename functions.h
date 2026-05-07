@@ -139,11 +139,13 @@ void PUSH_##reg_name() { \
     save_byte(--reg->sp, reg->reg_name & 0xFF); \
 }
 
+// Pop register off the stack, incrementing SP by 2
 #define POP_REG16(reg_name) \
 void POP_##reg_name() { \
     reg->reg_name = read_byte(reg->sp++) | (read_byte(reg->sp++) << 8); \
 }
 
+// ADD reg to register A
 #define GEN_ADD_A_REG(reg_name) \
 void ADD_A_##reg_name(){ \
     uint8_t val = reg->reg_name; \
@@ -158,6 +160,7 @@ void ADD_A_##reg_name(){ \
     reg->a = (uint8_t)result; \
 }
 
+// ADD reg and carry bit to register A
 #define GEN_ADC_A_REG(reg_name) \
 void ADC_A_##reg_name(){ \
     uint8_t val = reg->reg_name; \
@@ -173,6 +176,7 @@ void ADC_A_##reg_name(){ \
     reg->a = (uint8_t)result; \
 }
 
+// SUB reg to register A
 #define GEN_SUB_A_REG(reg_name) \
 void SUB_A_##reg_name(){ \
     uint8_t val = reg->reg_name; \
@@ -187,6 +191,7 @@ void SUB_A_##reg_name(){ \
     reg->a = (uint8_t)result; \
 }
 
+// SUB reg and carry bit to register A
 #define GEN_SBC_A_REG(reg_name) \
 void SBC_A_##reg_name(){ \
     uint8_t val = reg->reg_name; \
@@ -202,6 +207,7 @@ void SBC_A_##reg_name(){ \
     reg->a = (uint8_t)result; \
 }
 
+// AND between register A and register
 #define GEN_AND_A_REG(reg_name) \
 void AND_A_##reg_name() { \
     reg->f = 0x20; \
@@ -210,6 +216,7 @@ void AND_A_##reg_name() { \
     reg->a &= reg->reg_name; \
 }
 
+// OR between register A and register
 #define GEN_OR_A_REG(reg_name) \
 void OR_A_##reg_name() { \
     reg->f = 0x0; \
@@ -218,6 +225,7 @@ void OR_A_##reg_name() { \
     reg->a |= reg->reg_name; \
 }
 
+// XOR between register A and register
 #define GEN_XOR_A_REG(reg_name) \
 void XOR_A_##reg_name() { \
     reg->f = 0x0; \
@@ -226,6 +234,7 @@ void XOR_A_##reg_name() { \
     reg->a ^= reg->reg_name; \
 }
 
+// CMP between register A and register
 #define GEN_CP_A_REG(reg_name) \
 void CP_A_##reg_name() { \
     uint8_t val = reg->reg_name; \
@@ -242,6 +251,7 @@ void CP_A_##reg_name() { \
     } \
 }
 
+// INC register
 #define GEN_INC_REG(reg_name) \
 void INC_##reg_name() { \
     reg->f &= 0x10; \
@@ -254,6 +264,7 @@ void INC_##reg_name() { \
     } \
 }
 
+// DEC register
 #define GEN_DEC_REG(reg_name) \
 void DEC_##reg_name() { \
     reg->f &= 0x10; \
@@ -263,6 +274,17 @@ void DEC_##reg_name() { \
     --reg->reg_name; \
     if(reg->reg_name == 0) \
         reg->f |= 0x80; \
+}
+
+// ADD register into hl register
+#define GEN_ADD_HL_REG(reg_name) \
+void ADD_HL_##reg_name(){ \
+    reg->f &= 0x80; \
+    if(reg->hl + reg->reg_name > 0xFFFF) \
+        reg->f |= 0x10; \
+    if((reg->hl & 0xFFF) + (reg->reg_name & 0xFFF) > 0xFFF) \
+        reg->f |= 0x20; \
+    reg->hl += reg->reg_name; \
 }
 
 void NOP(){
