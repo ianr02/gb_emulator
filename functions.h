@@ -30,7 +30,7 @@ uint8_t read_byte(uint16_t address) {
     return 0xFF;
 }
 
-int save_byte(uint16_t address, uint8_t val){
+int save_byte(uint16_t address, uint16_t val){
     if (address >= 0x0000 && address <= 0x7FFF) {
         memory->rom[address] = val;
         exit(EXIT_SUCCESS);
@@ -119,11 +119,17 @@ void SLD_##reg1##_##reg2() { \
     reg->reg1 = 0xFF00 |reg->reg2; \
 }
 
-
 // save form value in reg1 into [reg2 + 0xFF00 ($FF00)]
 #define GEN_SV_REG_REG(reg1, reg2) \
 void SLD_##reg1##_##reg2() { \
     save_byte(0xFF00 | reg->reg2, reg->reg1); \
+}
+
+// load inmediate 16 bit value into register of 16 bit
+#define GEN_LD_IMM_REG16(reg_name) \
+void LD_##reg_name##_nn() { \
+    uint16_t value = read_byte(reg->pc++) | (read_byte(reg->pc++) << 8); \
+    reg->reg_name = value; \
 }
 
 void NOP(){
@@ -136,14 +142,28 @@ void LDI_hl_a(){
     reg->hl++;
 }
 
+// Save value from A into memory in [0xFF00 + n], where n is an 8 bit immediate value
 void SVH_imm_a(){
     uint8_t address = 0xFF00 | read_byte(reg->pc++);
     save_byte(address, reg->a);
 }
 
+// Load value from memory in [0xFF00 + n], where n is an 8 bit immediate value, into A
 void LDH_imm_a(){
     uint8_t address = 0xFF00 | read_byte(reg->pc++);
     reg->a = read_byte(address);
+}
+
+// Save value in HL, being value of SP + n, where n is an 8 bit signed immediate value
+void LDHL_sp_n(){
+    int8_t n = read_byte(reg->pc++);
+    reg->hl = reg->sp + n;
+}
+
+// Save SP into [nn], being 16 bit immediate value
+void SV_nn_sp(){
+    uint16_t address = read_byte(reg->pc++) | (read_byte(reg->pc++) << 8);
+    save_byte(address, reg->sp);
 }
 
 GEN_REG_BC(a);
@@ -213,6 +233,10 @@ GEN_LD_ADDR_IMM(d);
 GEN_LD_ADDR_IMM(e);
 GEN_LD_ADDR_IMM(h);
 GEN_LD_ADDR_IMM(l);
+GEN_LD_IMM_REG16(bc);
+GEN_LD_IMM_REG16(de);
+GEN_LD_IMM_REG16(hl);
+GEN_LD_IMM_REG16(sp);
 
 GEN_LD_N(a);
 GEN_LD_N(b);
@@ -278,18 +302,19 @@ GEN_LD_R1_R2(hl, d);
 GEN_LD_R1_R2(hl, e);
 GEN_LD_R1_R2(hl, h);
 GEN_LD_R1_R2(hl, l);
+GEN_LD_R1_R2(sp, hl);
 
 instruction_ptr opcode_table[256] = {
     // 0x0_
     [0x00] = NOP, // NOP
-    [0x01] = NULL, // LD BC, nn
+    [0x01] = LD_bc_nn, // LD BC, nn
     [0x02] = SV_bc_a, // LD (BC), A
     [0x03] = NULL, // INC BC
     [0x04] = NULL, // INC B
     [0x05] = NULL, // DEC B
     [0x06] = LD_b_n, // LD B, n
     [0x07] = NULL, // RLC A
-    [0x08] = NULL, // LD (nn), SP
+    [0x08] = SV_nn_sp, // LD (nn), SP
     [0x09] = NULL, // ADD HL, BC
     [0x0A] = LD_a_bc, // LD A, (BC)
     [0x0B] = NULL, // DEC BC
@@ -300,7 +325,7 @@ instruction_ptr opcode_table[256] = {
 
     // 0x1_
     [0x10] = NULL, // STOP
-    [0x11] = NULL, // LD DE, nn
+    [0x11] = LD_de_nn, // LD DE, nn
     [0x12] = SV_de_a, // LD (DE), A
     [0x13] = NULL, // INC DE
     [0x14] = NULL, // INC D
@@ -318,7 +343,7 @@ instruction_ptr opcode_table[256] = {
 
     // 0x2_
     [0x20] = NULL, // JR NZ, n
-    [0x21] = NULL, // LD HL, nn
+    [0x21] = LD_hl_nn, // LD HL, nn
     [0x22] = LDI_hl_a, // LDI (HL), A
     [0x23] = NULL, // INC HL
     [0x24] = NULL, // INC H
@@ -336,7 +361,7 @@ instruction_ptr opcode_table[256] = {
 
     // 0x3_
     [0x30] = NULL, // JR NC, n
-    [0x31] = NULL, // LD SP, nn
+    [0x31] = LD_sp_nn, // LD SP, nn
     [0x32] = NULL, // LDD (HL), A
     [0x33] = NULL, // INC SP
     [0x34] = NULL, // INC (HL)
@@ -553,7 +578,7 @@ instruction_ptr opcode_table[256] = {
     [0xF6] = NULL, // OR n
     [0xF7] = NULL, // RST 30
     [0xF8] = NULL, // LDHL SP, d
-    [0xF9] = NULL, // LD SP, HL
+    [0xF9] = LD_sp_hl, // LD SP, HL
     [0xFA] = LD_a_nn, // LD A, (nn)
     [0xFB] = NULL, // EI (Enable Interrupts)
     [0xFC] = NULL, // XX (Invalid)
