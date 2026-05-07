@@ -242,14 +242,14 @@ void CP_A_##reg_name() { \
     } \
 }
 
-#define GEN_INC_REG(reg_name) \ 
+#define GEN_INC_REG(reg_name) \
 void INC_##reg_name() { \
     reg->f &= 0x10; \
     if((reg->reg_name & 0xF) + 0x01 > 0xF) { \
         reg->f |= 0x20; \
     } \
     ++reg->reg_name;  \
-    if (reg->reg_name == 0) { \  
+    if (reg->reg_name == 0) { \
         reg->f |= 0x80; \
     } \
 }
