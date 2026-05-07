@@ -4,87 +4,8 @@
 #include <stdlib.h>
 #define FUNCTIONS_H
 
-// load inmediate value into register
-#define GEN_LD_N(reg_name) \
-void LD_##reg_name##_n() { \
-    reg->reg_name = read_byte(reg->pc++); \
-} 
-
-// copy value from r2 to r1
-#define GEN_LD_R1_R2(r1, r2) \
-void LD_##r1##_##r2##() { \
-    reg->r1 = reg->r2; \
-}
-
-// load value from memory in bc into register
-#define GEN_REG_BC(reg_name) \
-void LD_##reg_name##_bc() { \
-    reg->reg_name = read_byte(reg->bc); \
-}
-
-// load value from memory in de into register
-#define GEN_REG_DE(reg_name) \
-void LD_##reg_name##_de() { \
-    reg->reg_name = read_byte(reg->de); \
-}
-
-// load value from memory in hl into register
-#define GEN_REG_HL(reg_name) \
-void LD_##reg_name##_hl() { \
-    reg->reg_name = read_byte(reg->hl); \
-}
-
-// load value from memory in [nn], 16 bit value, into register
-#define GEN_REG_NN(reg_name) \
-void LD_##reg_name##_nn() { \
-    uint16_t address = read_byte(reg->pc++) | (read_byte(reg->pc++) << 8); \
-    reg->reg_name = read_byte(address); \
-}
-
-// save value from register into memory in [register]
-#define GEN_LD_ADDR_R(reg_addr, reg_name) \
-void SV_##reg_addr##_##reg_name##() { \
-    save_byte(reg->reg_addr, reg->reg_name); \
-}
-
-// save inmediate value into memory in [register]
-#define GEN_LD_ADDR_IMM(reg_addr) \
-void SV_##reg_addr##_n() { \
-    uint8_t val = read_byte(reg->pc++); \
-    save_byte(reg->reg_addr, val); \
-}
-
-// load form value in reg2 + 0xFF00 ($FF00) into reg1
-#define GEN_LD_REG_REG(reg1, reg2) \
-void SLD_##reg1##_##reg2##() { \
-    reg->reg1 = 0xFF00 |reg->reg2; \
-}
-
-// save form value in reg1 into [reg2 + 0xFF00 ($FF00)]
-#define GEN_SV_REG_REG(reg1, reg2) \
-void SLD_##reg1##_##reg2##() { \
-    save_byte(0xFF00 | reg->reg2, reg->reg1); \
-}
-
-void NOP(){
-    
-}
-
-// Load value from A into memory in [HL], then increment HL
-void LDI_hl_a(){
-    write_byte(reg->hl, reg->a);
-    reg->hl++;
-}
-
-void SVH_imm_a(){
-    uint8_t address = 0xFF00 | read_byte(reg->pc++);
-    save_byte(address, reg->a);
-}
-
-void LDH_imm_a(){
-    uint8_t address = 0xFF00 | read_byte(reg->pc++);
-    reg->a = read_byte(address);
-}
+extern GameBoyMemory *memory;
+extern registers *reg;
 
 uint8_t read_byte(uint16_t address) {
     if (address >= 0x0000 && address <= 0x7FFF) {
@@ -139,6 +60,90 @@ int save_byte(uint16_t address, uint8_t val){
         exit(EXIT_SUCCESS);
     }
     exit(EXIT_FAILURE);
+}
+
+
+// load inmediate value into register
+#define GEN_LD_N(reg_name) \
+void LD_##reg_name##_n() { \
+    reg->reg_name = read_byte(reg->pc++); \
+} 
+
+// copy value from r2 to r1
+#define GEN_LD_R1_R2(r1, r2) \
+void LD_##r1##_##r2() { \
+    reg->r1 = reg->r2; \
+}
+
+// load value from memory in bc into register
+#define GEN_REG_BC(reg_name) \
+void LD_##reg_name##_bc() { \
+    reg->reg_name = read_byte(reg->bc); \
+}
+
+// load value from memory in de into register
+#define GEN_REG_DE(reg_name) \
+void LD_##reg_name##_de() { \
+    reg->reg_name = read_byte(reg->de); \
+}
+
+// load value from memory in hl into register
+#define GEN_REG_HL(reg_name) \
+void LD_##reg_name##_hl() { \
+    reg->reg_name = read_byte(reg->hl); \
+}
+
+// load value from memory in [nn], 16 bit value, into register
+#define GEN_REG_NN(reg_name) \
+void LD_##reg_name##_nn() { \
+    uint16_t address = read_byte(reg->pc++) | (read_byte(reg->pc++) << 8); \
+    reg->reg_name = read_byte(address); \
+}
+
+// save value from register into memory in [register]
+#define GEN_LD_ADDR_R(reg_addr, reg_name) \
+void SV_##reg_addr##_##reg_name() { \
+    save_byte(reg->reg_addr, reg->reg_name); \
+}
+
+// save inmediate value into memory in [register]
+#define GEN_LD_ADDR_IMM(reg_addr) \
+void SV_##reg_addr##_n() { \
+    uint8_t val = read_byte(reg->pc++); \
+    save_byte(reg->reg_addr, val); \
+}
+
+// load form value in reg2 + 0xFF00 ($FF00) into reg1
+#define GEN_LD_REG_REG(reg1, reg2) \
+void SLD_##reg1##_##reg2() { \
+    reg->reg1 = 0xFF00 |reg->reg2; \
+}
+
+
+// save form value in reg1 into [reg2 + 0xFF00 ($FF00)]
+#define GEN_SV_REG_REG(reg1, reg2) \
+void SLD_##reg1##_##reg2() { \
+    save_byte(0xFF00 | reg->reg2, reg->reg1); \
+}
+
+void NOP(){
+    
+}
+
+// Load value from A into memory in [HL], then increment HL
+void LDI_hl_a(){
+    save_byte(reg->hl, reg->a);
+    reg->hl++;
+}
+
+void SVH_imm_a(){
+    uint8_t address = 0xFF00 | read_byte(reg->pc++);
+    save_byte(address, reg->a);
+}
+
+void LDH_imm_a(){
+    uint8_t address = 0xFF00 | read_byte(reg->pc++);
+    reg->a = read_byte(address);
 }
 
 GEN_REG_BC(a);
