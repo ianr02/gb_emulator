@@ -287,6 +287,25 @@ void ADD_HL_##reg_name(){ \
     reg->hl += reg->reg_name; \
 }
 
+#define GEN_INC_REG16(reg_name) \
+void INC_##reg_name(){ \
+    ++reg->reg_name; \
+}
+
+#define GEN_DEC_REG16(reg_name) \
+void DEC_##reg_name(){ \
+    --reg->reg_name; \
+}
+
+// swap bits 0-3 and 4-7
+#define GEN_SWAP_REG(reg_name) \
+void SWAP_##reg_name() { \
+    reg->f = 0x0; \
+    if (reg->reg_name == 0x0) \
+        reg-> f = 0x80; \
+    reg->reg_name = (reg->reg_name << 4) | (reg->reg_name >> 4); \
+}
+
 void NOP(){
     
 }
@@ -545,6 +564,51 @@ void DEC_hl() {
         reg->f |= 0x80;
     save_byte(reg->hl, val);
 }
+
+// add immediate value to stack pointer
+void ADD_SP_n() {
+    reg->f = 0x0;
+    int8_t val = (int8_t) read_byte(reg->pc++); 
+    uint16_t imm = (uint16_t)(uint8_t) val;
+    if((reg->sp & 0xF) + (imm & 0xF) > 0xF)
+        reg->f |= 0x20;
+    if((reg->sp & 0xFF) + (imm & 0xFF) > 0xFF)
+        reg->f |= 0x10;
+    reg->sp += val;
+}
+
+// swap bit 0-3 and 4-7 in [hl]
+void SWAP_hl() { 
+    uint8_t val = read_byte(reg->hl);
+    reg->f = 0x0; 
+    if (val == 0x0) 
+        reg-> f = 0x80; 
+    val = (val << 4) | (val >> 4); 
+    save_byte(reg->hl, val);
+}
+
+// Decimal adjust register A from binary to BCD. 
+void DAA() {
+    reg->f &= 0x40;
+    if (reg->a == 0x0)
+        reg->f |= 0x80;
+    reg->a = (16 * (reg->a >> 4)) + (reg->a & 0xF);
+}
+
+GEN_DEC_REG16(bc);
+GEN_DEC_REG16(de);
+GEN_DEC_REG16(hl);
+GEN_DEC_REG16(sp);
+
+GEN_INC_REG16(bc);
+GEN_INC_REG16(de);
+GEN_INC_REG16(hl);
+GEN_INC_REG16(sp);
+
+GEN_ADD_HL_REG(bc);
+GEN_ADD_HL_REG(de);
+GEN_ADD_HL_REG(hl);
+GEN_ADD_HL_REG(sp);
 
 GEN_CP_A_REG(a);
 GEN_CP_A_REG(b);
