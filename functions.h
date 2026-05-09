@@ -2,6 +2,7 @@
 #include "structs.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #define FUNCTIONS_H
 
 extern GameBoyMemory *memory;
@@ -589,11 +590,119 @@ void SWAP_hl() {
 
 // Decimal adjust register A from binary to BCD. 
 void DAA() {
-    reg->f &= 0x40;
-    if (reg->a == 0x0)
-        reg->f |= 0x80;
-    reg->a = (16 * (reg->a >> 4)) + (reg->a & 0xF);
+    uint8_t correction = 0;
+    bool carry = false;
+
+    if (!(reg->f & 0x40)) {
+        if ((reg->f & 0x20) || (reg->a & 0x0F) > 0x09) {
+            correction |= 0x06;
+        }
+        if ((reg->f & 0x10) || reg->a > 0x99) {
+            correction |= 0x60;
+            carry;
+        }
+    } else { 
+        if (reg->f & 0x20) {
+            correction |= 0x06;
+        }
+        if (reg->f & 0x10) {
+            correction |= 0x60;
+            carry = true; 
+        }
+    }
+
+    if (!(reg->f & 0x40)) {
+        reg->a += correction;
+    } else {
+        reg->a -= correction;
+    }
+
+    reg->f &= 0x40; 
+    if (reg->a == 0) 
+        reg->f |= 0x80; 
+    if (carry) 
+        reg->f |= 0x10;   
 }
+
+// flip a register
+void CPL() {
+    reg->a ^= 0xFF;
+    reg->f |= 0x60;
+}
+
+// Complement carry flag
+void CCF() {
+    reg->f ^= 0x10;
+    reg->f &= 0x50;
+}
+
+// Set Carry flag
+void SCF() {
+    reg->f &= 0x80;
+    reg->f |= 0x10;
+}
+
+// Halt CPU
+void HALT() {
+
+}
+
+// Halt CPU and Display
+void STOP() {
+
+}
+
+// disable interrupts after the instruction (cycles)
+void DI() {
+
+}
+
+// enable interrupts after the instruction (cycles)
+void DI() {
+
+}
+
+// Rotate A left. Old bit 7 to Carry flag.
+void RCLA() {
+    reg->f = 0x0;
+    uint8_t carry = (reg->a & 0x80) >> 7;
+    reg->a = (reg->a << 1) | carry;
+    reg->f |= (carry << 4);
+    if(reg->a == 0)
+        reg->f |= 0x80;
+}
+
+// Rotate A left through Carry flag
+void RLA() {
+    uint8_t new = (reg->a & 0x80) >> 7;
+    uint8_t old = (reg->f & 0x10) >> 4;
+    reg->a = (reg->a << 1) | old;
+    reg->f = (new << 4);
+    if(reg->a == 0)
+        reg->f |= 0x80;
+}
+
+// Rotate A right. Old bit 0 to Carry flag.
+void RRCA() {
+    reg->f = 0x0;
+    uint8_t carry = (reg->a & 0x01);
+    reg->a = (carry << 7) | (reg->a >> 1);
+    reg->f |= (carry << 4);
+    if(reg->a == 0)
+        reg->f |= 0x80;
+}
+
+// Rotate A right through Carry flag
+void RRA() {
+    uint8_t new = (reg->a & 0x01);
+    uint8_t old = (reg->f & 0x10) << 3;
+    reg->a = old | (reg->a >> 1);
+    reg->f = (new << 4);
+    if(reg->a == 0)
+        reg->f |= 0x80;
+}
+
+void
 
 GEN_DEC_REG16(bc);
 GEN_DEC_REG16(de);
