@@ -288,11 +288,13 @@ void ADD_HL_##reg_name(){ \
     reg->hl += reg->reg_name; \
 }
 
+// increment register of 16 bits
 #define GEN_INC_REG16(reg_name) \
 void INC_##reg_name(){ \
     ++reg->reg_name; \
 }
 
+// decrement register of 16 bits
 #define GEN_DEC_REG16(reg_name) \
 void DEC_##reg_name(){ \
     --reg->reg_name; \
@@ -306,6 +308,57 @@ void SWAP_##reg_name() { \
         reg-> f = 0x80; \
     reg->reg_name = (reg->reg_name << 4) | (reg->reg_name >> 4); \
 }
+
+#define GEN_RLC_n(reg_name) \
+void RLC_##reg_name() { \
+    reg->f = 0x0; \
+    uint8_t carry = (reg->reg_name & 0x80) >> 7; \
+    reg->reg_name = (reg->reg_name << 1) | carry; \
+    reg->f |= (carry << 4); \
+    if(reg->reg_name == 0) \
+        reg->f |= 0x80; \
+}
+
+#define GEN_RL_n(reg_name) \
+void RL_##reg_name() { \
+    uint8_t new = (reg->reg_name & 0x80) >> 7; \
+    uint8_t old = (reg->f & 0x10) >> 4; \
+    reg->reg_name = (reg->reg_name << 1) | old; \
+    reg->f = (new << 4); \
+    if(reg->reg_name == 0) \
+        reg->f |= 0x80; \
+}
+
+#define GEN_RRC_n(reg_name) \
+void RRC_##reg_name() { \
+    reg->f = 0x0; \
+    uint8_t carry = (reg->reg_name & 0x01); \
+    reg->reg_name = (carry << 7) | (reg->reg_name >> 1); \
+    reg->f |= (carry << 4); \ 
+    if(reg->reg_name == 0) \
+        reg->f |= 0x80; \
+}
+
+#define GEN_RR_n(reg_name) \
+void RR_##reg_name() { \
+    uint8_t new = (reg->reg_name & 0x01); \
+    uint8_t old = (reg->f & 0x10) << 3; \
+    reg->reg_name = old | (reg->reg_name >> 1); \
+    reg->f = (new << 4); \
+    if(reg->reg_name == 0) \
+        reg->f |= 0x80; \
+}
+
+#define GEN_SL_n(reg_name) \
+void SL_##reg_name() { \
+    uint8_t carry = (reg->reg_name & 0x80) >> 7; \
+    reg->f = carry << 4; \
+    reg->reg_name <<= 1; \
+    if (reg->reg_name == 0) \
+        reg->f |= 0x80; \
+}
+
+#define GEN_SRA_N(reg_name) \
 
 void NOP(){
     
@@ -662,47 +715,72 @@ void DI() {
 
 }
 
-// Rotate A left. Old bit 7 to Carry flag.
-void RCLA() {
+// Rotate [hl] left. Old bit 7 to Carry flag.
+void RCL_hl() {
     reg->f = 0x0;
-    uint8_t carry = (reg->a & 0x80) >> 7;
-    reg->a = (reg->a << 1) | carry;
+    uint8_t val = read_byte(reg->hl);
+    uint8_t carry = (val & 0x80) >> 7;
+    val = (val << 1) | carry;
+    save_byte(reg->hl, val);
     reg->f |= (carry << 4);
     if(reg->a == 0)
         reg->f |= 0x80;
 }
 
-// Rotate A left through Carry flag
-void RLA() {
-    uint8_t new = (reg->a & 0x80) >> 7;
+// Rotate [hl] left through Carry flag
+void RL_hl() {
+    uint8_t val = read_byte(reg->hl);
+    uint8_t new = (val & 0x80) >> 7;
     uint8_t old = (reg->f & 0x10) >> 4;
-    reg->a = (reg->a << 1) | old;
+    val = (val << 1) | old;
+    save_byte(reg->hl, val);
     reg->f = (new << 4);
-    if(reg->a == 0)
+    if(val == 0)
         reg->f |= 0x80;
 }
 
-// Rotate A right. Old bit 0 to Carry flag.
-void RRCA() {
+// Rotate [hl] right. Old bit 0 to Carry flag.
+void RRC_hl() {
     reg->f = 0x0;
-    uint8_t carry = (reg->a & 0x01);
-    reg->a = (carry << 7) | (reg->a >> 1);
+    uint8_t val = read_byte(reg->hl);
+    uint8_t carry = (val & 0x01);
+    val = (carry << 7) | (val >> 1);
+    save_byte(reg->hl, val);
     reg->f |= (carry << 4);
-    if(reg->a == 0)
+    if(val == 0)
         reg->f |= 0x80;
 }
 
-// Rotate A right through Carry flag
-void RRA() {
-    uint8_t new = (reg->a & 0x01);
+// Rotate [hl] right through Carry flag
+void RR_hl() {
+    uint8_t val = read_byte(reg->hl);
+    uint8_t new = (val & 0x01);
     uint8_t old = (reg->f & 0x10) << 3;
-    reg->a = old | (reg->a >> 1);
+    val = old | (val >> 1);
+    save_byte(reg->hl, val);
     reg->f = (new << 4);
-    if(reg->a == 0)
+    if(val == 0)
         reg->f |= 0x80;
 }
 
-void
+// shift left [hl]
+void SL_hl() {
+    uint8_t val = read_byte(reg->hl);
+    int8_t carry = (val & 0x80) >> 7; 
+    reg->f = carry << 4; 
+    val <<= 1; 
+    save_byte(reg->hl, val);
+    if (val == 0) 
+        reg->f |= 0x80; 
+}
+
+GEN_RLC_n(a);
+GEN_RLC_n(b);
+GEN_RLC_n(c);
+GEN_RLC_n(d);
+GEN_RLC_n(e);
+GEN_RLC_n(h);
+GEN_RLC_n(l);
 
 GEN_DEC_REG16(bc);
 GEN_DEC_REG16(de);
