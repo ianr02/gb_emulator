@@ -359,6 +359,27 @@ void SL_##reg_name() { \
 }
 
 #define GEN_SRA_N(reg_name) \
+void SRA_##reg_name() { \
+    uint8_t msb = reg->reg_name & 0x80; \
+    uint8_t carry = reg->reg_name & 0x01; \
+    reg->reg_name = msb | (reg->reg_name >> 1); \
+    reg->f = (carry << 4); \
+    if (reg->reg_name == 0x0) \
+        reg-> |= 0x80; \
+}
+
+#define GEN_SRL_N(reg_name) \
+void SRL_##reg_name() { \
+    uint8_t carry = reg->reg_name & 0x01; \
+    reg->reg_name >>= 1; \
+    reg->f = (carry << 4); \
+    if (reg->reg_name == 0x0) \
+        reg-> |= 0x80; \
+}
+
+#define GEN_BIT_N(reg_name) \
+void BIT_##reg_name() { \
+}
 
 void NOP(){
     
@@ -711,7 +732,7 @@ void DI() {
 }
 
 // enable interrupts after the instruction (cycles)
-void DI() {
+void EI() {
 
 }
 
@@ -771,6 +792,29 @@ void SL_hl() {
     val <<= 1; 
     save_byte(reg->hl, val);
     if (val == 0) 
+        reg->f |= 0x80; 
+}
+
+// shift right [hl] preserving msb
+void SRA_hl() {
+    uint8_t val = read_byte(reg->hl);
+    uint8_t msb = val & 0x80; 
+    uint8_t carry = val & 0x01; 
+    val = msb | (val >> 1); 
+    save_byte(reg->hl, val);
+    reg->f = (carry << 4); 
+    if (val == 0x0) 
+        reg->f |= 0x80; 
+}
+
+// shift right [hl] without preserving msb
+void SRL_hl() {
+    uint8_t val = read_byte(reg->hl);
+    uint8_t carry = val & 0x01; 
+    val >>= 1; 
+    save_byte(reg->hl, val);
+    reg->f = (carry << 4); 
+    if (val == 0x0) 
         reg->f |= 0x80; 
 }
 
@@ -1030,33 +1074,33 @@ instruction_ptr opcode_table[256] = {
     [0x00] = NOP, // NOP
     [0x01] = LD_bc_nn, // LD BC, nn
     [0x02] = SV_bc_a, // LD (BC), A
-    [0x03] = NULL, // INC BC
+    [0x03] = INC_bc, // INC BC
     [0x04] = INC_b, // INC B
     [0x05] = DEC_b, // DEC B
     [0x06] = LD_b_n, // LD B, n
     [0x07] = NULL, // RLC A
     [0x08] = SV_nn_sp, // LD (nn), SP
-    [0x09] = NULL, // ADD HL, BC
+    [0x09] = ADD_HL_bc, // ADD HL, BC
     [0x0A] = LD_a_bc, // LD A, (BC)
-    [0x0B] = NULL, // DEC BC
+    [0x0B] = DEC_bc, // DEC BC
     [0x0C] = INC_c, // INC C
     [0x0D] = DEC_c, // DEC C
     [0x0E] = LD_c_n, // LD C, n
     [0x0F] = NULL, // RRC A
 
     // 0x1_
-    [0x10] = NULL, // STOP
+    [0x10] = STOP, // STOP
     [0x11] = LD_de_nn, // LD DE, nn
     [0x12] = SV_de_a, // LD (DE), A
-    [0x13] = NULL, // INC DE
+    [0x13] = INC_de, // INC DE
     [0x14] = INC_d, // INC D
     [0x15] = DEC_d, // DEC D
     [0x16] = LD_d_n, // LD D, n
     [0x17] = NULL, // RL A
     [0x18] = NULL, // JR n
-    [0x19] = NULL, // ADD HL, DE
+    [0x19] = ADD_HL_de, // ADD HL, DE
     [0x1A] = LD_a_de, // LD A, (DE)
-    [0x1B] = NULL, // DEC DE
+    [0x1B] = DEC_de, // DEC DE
     [0x1C] = INC_e, // INC E
     [0x1D] = DEC_e, // DEC E
     [0x1E] = LD_e_n, // LD E, n
@@ -1066,35 +1110,35 @@ instruction_ptr opcode_table[256] = {
     [0x20] = NULL, // JR NZ, n
     [0x21] = LD_hl_nn, // LD HL, nn
     [0x22] = LDI_hl_a, // LDI (HL), A
-    [0x23] = NULL, // INC HL
+    [0x23] = INC_hl, // INC HL
     [0x24] = INC_h, // INC H
     [0x25] = DEC_h, // DEC H
     [0x26] = LD_h_n, // LD H, n
-    [0x27] = NULL, // DAA
+    [0x27] = DAA, // DAA
     [0x28] = NULL, // JR Z, n
-    [0x29] = NULL, // ADD HL, HL
+    [0x29] = ADD_HL_hl, // ADD HL, HL
     [0x2A] = NULL, // LDI A, (HL)
-    [0x2B] = NULL, // DEC HL
+    [0x2B] = DEC_hl, // DEC HL
     [0x2C] = INC_l, // INC L
     [0x2D] = DEC_l, // DEC L
     [0x2E] = LD_l_n, // LD L, n
-    [0x2F] = NULL, // CPL
+    [0x2F] = CPL, // CPL
 
     // 0x3_
     [0x30] = NULL, // JR NC, n
     [0x31] = LD_sp_nn, // LD SP, nn
     [0x32] = NULL, // LDD (HL), A
-    [0x33] = NULL, // INC SP
+    [0x33] = INC_sp, // INC SP
     [0x34] = INC_hl, // INC (HL)
     [0x35] = DEC_hl, // DEC (HL)
     [0x36] = SV_hl_n, // LD (HL), n
     [0x37] = NULL, // SCF
     [0x38] = NULL, // JR C, n
-    [0x39] = NULL, // ADD HL, SP
+    [0x39] = ADD_HL_sp, // ADD HL, SP
     [0x3A] = NULL, // LDD A, (HL)
-    [0x3B] = NULL, // DEC SP
-    [0x3C] = NULL, // INC A
-    [0x3D] = NULL, // DEC A
+    [0x3B] = DEC_sp, // DEC SP
+    [0x3C] = INC_a, // INC A
+    [0x3D] = DEC_a, // DEC A
     [0x3E] = LD_a_n, // LD A, n
     [0x3F] = NULL, // CCF
 
@@ -1300,7 +1344,7 @@ instruction_ptr opcode_table[256] = {
     [0xF0] = LDH_imm_a, // LDH A, (n)
     [0xF1] = POP_af , // POP AF
     [0xF2] = SLD_a_c, // LDH A, [C] 
-    [0xF3] = NULL, // DI (Disable Interrupts)
+    [0xF3] = DI, // DI (Disable Interrupts)
     [0xF4] = NULL, // XX (Invalid)
     [0xF5] = PUSH_af, // PUSH AF
     [0xF6] = OR_A_n, // OR n
@@ -1308,7 +1352,7 @@ instruction_ptr opcode_table[256] = {
     [0xF8] = NULL, // LDHL SP, d
     [0xF9] = LD_sp_hl, // LD SP, HL
     [0xFA] = LD_a_nn, // LD A, (nn)
-    [0xFB] = NULL, // EI (Enable Interrupts)
+    [0xFB] = EI, // EI (Enable Interrupts)
     [0xFC] = NULL, // XX (Invalid)
     [0xFD] = NULL, // XX (Invalid)
     [0xFE] = CP_A_n, // CP n
