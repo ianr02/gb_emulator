@@ -334,7 +334,7 @@ void RRC_##reg_name() { \
     reg->f = 0x0; \
     uint8_t carry = (reg->reg_name & 0x01); \
     reg->reg_name = (carry << 7) | (reg->reg_name >> 1); \
-    reg->f |= (carry << 4); \ 
+    reg->f |= (carry << 4); \
     if(reg->reg_name == 0) \
         reg->f |= 0x80; \
 }
@@ -377,9 +377,108 @@ void SRL_##reg_name() { \
         reg-> |= 0x80; \
 }
 
-#define GEN_BIT_N(reg_name) \
+#define GEN_BIT_n(reg_name) \
 void BIT_##reg_name() { \
+    uint8_t bit = read_byte(reg->pc++); \
+    uint8_t mask = 0x0; \
+    switch (bit) { \
+        case 0: \
+            mask = 0x01; \
+            break; \
+        case 1: \
+            mask = 0x02; \
+            break; \
+        case 2: \
+            mask = 0x04; \
+            break; \
+        case 3:  \
+            mask = 0x08; \
+            break; \
+        case 4: \
+            mask = 0x10; \
+            break; \
+        case 5: \
+            mask = 0x20; \
+            break; \
+        case 6: \
+            mask = 0x40; \
+            break; \
+        case 7: \
+            mask = 0x80; \
+            break; \
+    } \
+    reg->f &= 0x10; \
+    reg->f |= 0x20; \
+    if (!(reg->reg_name & mask)) \
+        reg->f |= 0x80; \
 }
+
+#define GEN_SET_n(reg_name) \
+void SET_##reg_name() { \
+    uint8_t bit = read_byte(reg->pc++); \
+    uint8_t mask = 0x0; \
+    switch (bit) { \
+        case 0: \
+            mask = 0x01; \
+            break; \
+        case 1: \
+            mask = 0x02; \
+            break; \
+        case 2: \
+            mask = 0x04; \
+            break; \
+        case 3:  \
+            mask = 0x08; \
+            break; \
+        case 4: \
+            mask = 0x10; \
+            break; \
+        case 5: \
+            mask = 0x20; \
+            break; \
+        case 6: \
+            mask = 0x40; \
+            break; \
+        case 7: \
+            mask = 0x80; \
+            break; \
+    } \
+    reg->reg_name |= mask; \
+}
+
+#define GEN_RESET_n(reg_name) \
+void RESET_##reg_name() { \
+    uint8_t bit = read_byte(reg->pc++); \
+    uint8_t mask = 0x0; \
+    switch (bit) { \
+        case 0:  \
+            mask = 0xFE; \
+            break; \
+        case 1: \
+            mask = 0xFD; \
+            break; \
+        case 2: \
+            mask = 0xFB; \
+            break; \
+        case 3:  \
+            mask = 0xF7; \
+            break; \
+        case 4: \
+            mask = 0xEF; \
+            break; \
+        case 5: \
+            mask = 0xDF; \
+            break; \
+        case 6: \
+            mask = 0xBF; \
+            break; \
+        case 7: \
+            mask = 0x7F; \
+            break; \
+    } \
+    reg->reg_name &= mask;\
+}
+
 
 void NOP(){
     
@@ -616,7 +715,7 @@ void CP_A_n() {
 }
 
 // INC value in [hl]
-void INC_hl() { 
+void INC_REGhl() { 
     uint8_t val = read_byte(reg->hl);
     reg->f &= 0x10; 
     if((val & 0xF) + 0x01 > 0xF) 
@@ -628,7 +727,7 @@ void INC_hl() {
 }
 
 // DEC value in [hl]
-void DEC_hl() { 
+void DEC_REGhl() { 
     uint8_t val = read_byte(reg->hl);
     reg->f &= 0x10; 
     reg->f |= 0x40;
@@ -817,6 +916,170 @@ void SRL_hl() {
     if (val == 0x0) 
         reg->f |= 0x80; 
 }
+
+// tests bit n in [hl]
+void BIT_hl() { 
+    uint8_t val = read_byte(reg->hl);
+    uint8_t bit = read_byte(reg->pc++); 
+    uint8_t mask = 0x0; 
+    switch (bit) { 
+        case 0: 
+            mask = 0x01; 
+            break; 
+        case 1: 
+            mask = 0x02; 
+            break; 
+        case 2: 
+            mask = 0x04; 
+            break; 
+        case 3:  
+            mask = 0x08; 
+            break; 
+        case 4: 
+            mask = 0x10; 
+            break; 
+        case 5: 
+            mask = 0x20; 
+            break; 
+        case 6: 
+            mask = 0x40; 
+            break; 
+        case 7: 
+            mask = 0x80; 
+            break; 
+    } 
+    reg->f &= 0x10; 
+    reg->f |= 0x20; 
+    if (!(val & mask))
+        reg->f |= 0x80; 
+}
+
+// set bit n in [hl]
+void SET_hl() { \
+    uint8_t val = read_byte(reg->hl);
+    uint8_t bit = read_byte(reg->pc++); 
+    uint8_t mask = 0x0; 
+    switch (bit) { 
+        case 0: 
+            mask = 0x01; 
+            break; 
+        case 1: 
+            mask = 0x02; 
+            break; 
+        case 2: 
+            mask = 0x04; 
+            break; 
+        case 3:  
+            mask = 0x08; 
+            break; 
+        case 4: 
+            mask = 0x10; 
+            break; 
+        case 5: 
+            mask = 0x20; 
+            break; 
+        case 6: 
+            mask = 0x40; 
+            break; 
+        case 7: 
+            mask = 0x80; 
+            break; 
+    } 
+    val |= mask; 
+    save_byte(reg->hl, val);
+}
+
+// reset bit n in [hl]
+void RESET_hl() { \
+    uint8_t val = read_byte(reg->hl);
+    uint8_t bit = read_byte(reg->pc++); 
+    uint8_t mask = 0x0; 
+    switch (bit) { 
+        case 0: 
+            mask = 0xFE; 
+            break; 
+        case 1: 
+            mask = 0xFD; 
+            break; 
+        case 2: 
+            mask = 0xFB; 
+            break; 
+        case 3:  
+            mask = 0xF7; 
+            break; 
+        case 4: 
+            mask = 0xEF; 
+            break; 
+        case 5: 
+            mask = 0xDF; 
+            break; 
+        case 6: 
+            mask = 0xBF; 
+            break; 
+        case 7: 
+            mask = 0x7F; 
+            break; 
+    } 
+    val &= mask;
+    save_byte(reg->hl, val);
+}
+
+// jp to address
+void JP() {
+    uint8_t low = read_byte(reg->pc++);
+    uint8_t high = read_byte(reg->pc++);
+    uint16_t address = (high << 8) | low;
+}
+ // jp to address in hl
+void JP_hl() {
+    reg->pc = reg->hl;
+}
+
+// jp if some flags are set
+void COND_JP() {
+    uint16_t address = read_byte(reg->pc++) | (read_byte(reg->pc) << 8);
+    if (reg->f & 0x80 || reg->f & 0x10){
+        reg->pc = address;
+    } 
+}
+
+// add n to current address
+void JR() {
+    int8_t n = (int8_t) read_byte(reg->pc++);
+    reg->pc = (uint16_t)(reg->pc + n);
+}
+
+// add n to current address if some flags are set
+void COND_JR() {
+    int8_t val = read_byte(reg->pc++);
+    if (reg->f & 0x80 || reg->f & 0x10){
+        reg->pc = (uint16_t) reg->pc + val;
+    } 
+}
+
+GEN_RESET_n(a);
+GEN_RESET_n(b);
+GEN_RESET_n(c);
+GEN_RESET_n(d);
+GEN_RESET_n(e);
+GEN_RESET_n(h);
+GEN_RESET_n(l);
+
+GEN_SET_n(a);
+GEN_SET_n(b);
+GEN_SET_n(c);
+GEN_SET_n(d);
+GEN_SET_n(e);
+GEN_SET_n(h);
+GEN_SET_n(l);
+
+GEN_BIT_n(a);
+GEN_BIT_n(b);
+GEN_BIT_n(c);
+GEN_BIT_n(d);
+GEN_BIT_n(e);
+GEN_BIT_n(h);
+GEN_BIT_n(l);
 
 GEN_RLC_n(a);
 GEN_RLC_n(b);
@@ -1097,7 +1360,7 @@ instruction_ptr opcode_table[256] = {
     [0x15] = DEC_d, // DEC D
     [0x16] = LD_d_n, // LD D, n
     [0x17] = NULL, // RL A
-    [0x18] = NULL, // JR n
+    [0x18] = JR, // JR n
     [0x19] = ADD_HL_de, // ADD HL, DE
     [0x1A] = LD_a_de, // LD A, (DE)
     [0x1B] = DEC_de, // DEC DE
@@ -1129,8 +1392,8 @@ instruction_ptr opcode_table[256] = {
     [0x31] = LD_sp_nn, // LD SP, nn
     [0x32] = NULL, // LDD (HL), A
     [0x33] = INC_sp, // INC SP
-    [0x34] = INC_hl, // INC (HL)
-    [0x35] = DEC_hl, // DEC (HL)
+    [0x34] = INC_REGhl, // INC (HL)
+    [0x35] = DEC_REGhl, // DEC (HL)
     [0x36] = SV_hl_n, // LD (HL), n
     [0x37] = NULL, // SCF
     [0x38] = NULL, // JR C, n
@@ -1290,7 +1553,7 @@ instruction_ptr opcode_table[256] = {
     [0xC0] = NULL, // RET NZ
     [0xC1] = POP_bc, // POP BC
     [0xC2] = NULL, // JP NZ, nn
-    [0xC3] = NULL, // JP nn
+    [0xC3] = JP, // JP nn
     [0xC4] = NULL, // CALL NZ, nn
     [0xC5] = PUSH_bc, // PUSH BC
     [0xC6] = ADD_A_n, // ADD A, n
@@ -1332,7 +1595,7 @@ instruction_ptr opcode_table[256] = {
     [0xE6] = AND_A_n, // AND n
     [0xE7] = NULL, // RST 20
     [0xE8] = NULL, // ADD SP, d
-    [0xE9] = NULL, // JP (HL)
+    [0xE9] = JP_hl, // JP (HL)
     [0xEA] = SV_a_n, // LD (nn), A
     [0xEB] = NULL, // XX (Invalid)
     [0xEC] = NULL, // XX (Invalid)
