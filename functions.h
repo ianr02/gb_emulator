@@ -7,6 +7,7 @@
 
 extern GameBoyMemory *memory;
 extern registers *reg;
+extern uint8_t opcode;
 
 uint8_t read_byte(uint16_t address) {
     if (address >= 0x0000 && address <= 0x7FFF) {
@@ -1030,15 +1031,37 @@ void JP() {
     uint8_t high = read_byte(reg->pc++);
     uint16_t address = (high << 8) | low;
 }
+
  // jp to address in hl
 void JP_hl() {
     reg->pc = reg->hl;
 }
 
 // jp if some flags are set
-void COND_JP() {
+void JP_NZ() {
     uint16_t address = read_byte(reg->pc++) | (read_byte(reg->pc) << 8);
-    if (reg->f & 0x80 || reg->f & 0x10){
+    if (!(reg->f & 0x80)){
+        reg->pc = address;
+    } 
+}
+
+void JP_Z() {
+    uint16_t address = read_byte(reg->pc++) | (read_byte(reg->pc) << 8);
+    if (reg->f & 0x80){
+        reg->pc = address;
+    } 
+}
+
+void JP_NC() {
+    uint16_t address = read_byte(reg->pc++) | (read_byte(reg->pc) << 8);
+    if (!(reg->f & 0x10)){
+        reg->pc = address;
+    } 
+}
+
+void JP_C() {
+    uint16_t address = read_byte(reg->pc++) | (read_byte(reg->pc) << 8);
+    if (reg->f & 0x10){
         reg->pc = address;
     } 
 }
@@ -1050,11 +1073,148 @@ void JR() {
 }
 
 // add n to current address if some flags are set
-void COND_JR() {
+void JR_COND() {
     int8_t val = read_byte(reg->pc++);
-    if (reg->f & 0x80 || reg->f & 0x10){
-        reg->pc = (uint16_t) reg->pc + val;
-    } 
+    switch (opcode) {
+    case 0x20:
+        if (!(reg->f & 0x80)){
+            reg->pc = (uint16_t) reg->pc + val;
+        }
+        break;
+    
+    case 0x28:
+        if (reg->f & 0x80){
+            reg->pc = (uint16_t) reg->pc + val;
+        }
+        break;
+    
+    case 0x30:
+        if (!(reg->f & 0x10)){
+            reg->pc = (uint16_t) reg->pc + val;
+        }
+        break;
+
+    case 0x38:
+        if (reg->f & 0x10){
+            reg->pc = (uint16_t) reg->pc + val;
+        }
+        break;
+    }
+} 
+
+void CALL() {
+    uint8_t low = read_byte(reg->pc++);
+    uint8_t high = read_byte(reg->pc++);
+    uint16_t address = (high<<8) | low;
+    save_byte(--reg->sp, (reg->pc >> 8) & 0xFF);
+    save_byte(--reg->sp, reg->pc & 0xFF);
+    reg->pc = address;
+}
+
+void CALL_COND() {
+    uint8_t low = read_byte(reg->pc++);
+    uint8_t high = read_byte(reg->pc++);
+    uint16_t address = (high<<8) | low;
+    switch (opcode) {
+    case 0xC4:       
+        if(!(reg->f & 0x80)) {
+            save_byte(--reg->sp, (reg->pc >> 8) & 0xFF);
+            save_byte(--reg->sp, reg->pc & 0xFF);
+            reg->pc = address;
+        }
+        break;
+    case 0xCC:
+        if(reg->f & 0x80) {
+            save_byte(--reg->sp, (reg->pc >> 8) & 0xFF);
+            save_byte(--reg->sp, reg->pc & 0xFF);
+            reg->pc = address;
+        }
+        break;
+    case 0xD4:
+        if(!(reg->f & 010)) {
+            save_byte(--reg->sp, (reg->pc >> 8) & 0xFF);
+            save_byte(--reg->sp, reg->pc & 0xFF);
+            reg->pc = address;
+        }
+        break;
+    case 0xDC:
+        if(reg->f & 0x10) {
+            save_byte(--reg->sp, (reg->pc >> 8) & 0xFF);
+            save_byte(--reg->sp, reg->pc & 0xFF);
+            reg->pc = address;
+        }
+    }
+}
+
+// Push present address onto stack. Jump to address 0x0000 + n
+void RST() {
+    uint8_t offset = 0x0;
+    switch (opcode){
+        case 0xCF:
+            offset = 0x08;
+            break;
+        case 0xD7:
+            offset = 0x10;
+            break;
+        case 0xDF:
+            offset = 0x18;
+            break;
+        case 0xE7:
+            offset = 0x20;
+            break;
+        case 0xEF:
+            offset = 0x28;
+            break;
+        case 0xF7:
+            offset = 0x30;
+            break;
+        case 0xFF:
+            offset = 0x38;
+            break;
+    }
+    save_byte(--reg->sp, reg->pc);
+    reg->pc = 0x0000 + offset;
+}
+
+// Pop two bytes from stack & jump to that address
+void RET() {
+    uint16_t address = read_byte(reg->sp++) | (read_byte(reg->sp++) << 8);
+    reg->pc = address;
+}
+
+// Pop two bytes from stack & jump to that address if cond is met
+void RET_COND(uint8_t opcode) {
+    bool condition_met = false;
+    switch (opcode) {
+        case 0xC0: 
+            if(!(reg->f & 0x80)) 
+                condition_met = true; 
+            break; 
+        case 0xC8: 
+            if( (reg->f & 0x80)) 
+                condition_met = true; 
+            break; 
+        case 0xD0: 
+            if(!(reg->f & 0x10)) 
+                condition_met = true; 
+            break; 
+        case 0xD8: 
+            if( (reg->f & 0x10)) 
+                condition_met = true; 
+            break; 
+    }
+
+    if (condition_met) {
+        uint8_t low = read_byte(reg->sp++);
+        uint8_t high = read_byte(reg->sp++);
+        reg->pc = (high << 8) | low;   
+    }
+}
+
+// Pop two bytes from stack & jump to that address then enable interrupts
+void RETI() {
+    uint16_t address = read_byte(reg->sp++) | (read_byte(reg->sp++) << 8);
+    reg->pc = address;
 }
 
 GEN_RESET_n(a);

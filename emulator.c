@@ -3,6 +3,7 @@
 
 GameBoyMemory *memory;
 registers *reg;
+uint8_t opcode;
 
 int main(int argc, char *argv[]) {
     memory = malloc(GAMEBOY_MEMORY_SIZE);
@@ -24,7 +25,7 @@ int main(int argc, char *argv[]) {
 
     bool go = true;
     while(go){
-        uint8_t opcode = read_byte(reg->pc);
+        opcode = read_byte(reg->pc);
 
         printf("PC: 0x%04X | Opcode: 0x%02X\n", reg->pc, opcode);
 
