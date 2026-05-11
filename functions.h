@@ -212,7 +212,7 @@ void SBC_A_##reg_name(){ \
 #define GEN_AND_A_REG(reg_name) \
 void AND_A_##reg_name() { \
     reg->f = 0x20; \
-    if (reg->a & reg->reg_name == 0) \
+    if ((reg->a & reg->reg_name) == 0) \
         reg->f |= 0x80; \
     reg->a &= reg->reg_name; \
 }
@@ -221,7 +221,7 @@ void AND_A_##reg_name() { \
 #define GEN_OR_A_REG(reg_name) \
 void OR_A_##reg_name() { \
     reg->f = 0x0; \
-    if (reg->a | reg->reg_name == 0) \
+    if ((reg->a | reg->reg_name) == 0) \
         reg->f |= 0x80; \
     reg->a |= reg->reg_name; \
 }
@@ -230,7 +230,7 @@ void OR_A_##reg_name() { \
 #define GEN_XOR_A_REG(reg_name) \
 void XOR_A_##reg_name() { \
     reg->f = 0x0; \
-    if (reg->a ^ reg->reg_name == 0) \
+    if ((reg->a ^ reg->reg_name)== 0) \
         reg->f |= 0x80; \
     reg->a ^= reg->reg_name; \
 }
@@ -662,7 +662,7 @@ void SBC_A_imm(){ \
 void AND_A_hl() { 
     uint8_t val = read_byte(reg->hl);
     reg->f = 0x20; 
-    if (reg->a & val == 0)  
+    if ((reg->a & val) == 0)  
         reg->f |= 0x80; 
     reg->a &= val; 
 }
@@ -671,7 +671,7 @@ void AND_A_hl() {
 void AND_A_n() { 
     uint8_t val = read_byte(reg->pc++);
     reg->f = 0x20; 
-    if (reg->a & val == 0)  
+    if ((reg->a & val) == 0)  
         reg->f |= 0x80; 
     reg->a &= val; 
 }
@@ -680,7 +680,7 @@ void AND_A_n() {
 void OR_A_hl() { 
     uint8_t val = read_byte(reg->hl);
     reg->f = 0x0; 
-    if (reg->a | val == 0) 
+    if ((reg->a | val) == 0) 
         reg->f |= 0x80; 
     reg->a |= val;
 }
@@ -689,16 +689,16 @@ void OR_A_hl() {
 void OR_A_n() { 
     uint8_t val = read_byte(reg->pc++);
     reg->f = 0x0; 
-    if (reg->a | val == 0) 
+    if ((reg->a | val) == 0) 
         reg->f |= 0x80; 
     reg->a |= val;
 }
 
 // XOR between register a and value in [hl]
-void XOR_A_hl() { 
+void XOR_A_hl() {
     uint8_t val = read_byte(reg->hl++);
     reg->f = 0x0; 
-    if (reg->a ^ val == 0) 
+    if ((reg->a ^ val) == 0) 
         reg->f |= 0x80; 
     reg->a ^= val;
 }
@@ -707,7 +707,7 @@ void XOR_A_hl() {
 void XOR_A_n() { 
     uint8_t val = read_byte(reg->pc++);
     reg->f = 0x0; 
-    if (reg->a ^ val == 0) 
+    if ((reg->a ^ val) == 0) 
         reg->f |= 0x80; 
     reg->a ^= val;
 }
@@ -789,14 +789,13 @@ void SWAP_hl() {
 void DAA() {
     uint8_t correction = 0;
     bool carry = false;
-
     if (!(reg->f & 0x40)) {
         if ((reg->f & 0x20) || (reg->a & 0x0F) > 0x09) {
             correction |= 0x06;
         }
         if ((reg->f & 0x10) || reg->a > 0x99) {
             correction |= 0x60;
-            carry;
+            carry = true;
         }
     } else { 
         if (reg->f & 0x20) {
@@ -1207,7 +1206,7 @@ void RET() {
 }
 
 // Pop two bytes from stack & jump to that address if cond is met
-void RET_COND(uint8_t opcode) {
+void RET_COND() {
     bool condition_met = false;
     switch (opcode) {
         case 0xC0: 
