@@ -484,6 +484,12 @@ void NOP(){
     
 }
 
+// Put value A into [nn]
+void SV_nn_a() {
+    uint16_t address = read_byte(reg->pc++) | (read_byte(reg->pc++) << 8);
+    save_byte(address, reg->a);
+}
+
 // Save value from A into memory in [0xFF00 + n], where n is an 8 bit immediate value
 void SVH_imm_a(){
     uint8_t address = 0xFF00 | read_byte(reg->pc++);
@@ -1055,7 +1061,7 @@ void JP_hl() {
 }
 
 // jp if some flags are set
-void JP_NZ() {
+void JP_COND() {
     bool condition_met = false;
     switch (opcode)
     {
@@ -1259,6 +1265,30 @@ GEN_BIT_n(e);
 GEN_BIT_n(h);
 GEN_BIT_n(l);
 
+GEN_RR_n(a);
+GEN_RR_n(b);
+GEN_RR_n(c);
+GEN_RR_n(d);
+GEN_RR_n(e);
+GEN_RR_n(h);
+GEN_RR_n(l);
+
+GEN_RRC_n(a);
+GEN_RRC_n(b);
+GEN_RRC_n(c);
+GEN_RRC_n(d);
+GEN_RRC_n(e);
+GEN_RRC_n(h);
+GEN_RRC_n(l);
+
+GEN_RL_n(a);
+GEN_RL_n(b);
+GEN_RL_n(c);
+GEN_RL_n(d);
+GEN_RL_n(e);
+GEN_RL_n(h);
+GEN_RL_n(l);
+
 GEN_RLC_n(a);
 GEN_RLC_n(b);
 GEN_RLC_n(c);
@@ -1432,7 +1462,6 @@ GEN_LD_ADDR_R(de, l);
 GEN_LD_ADDR_IMM(hl);
 GEN_LD_ADDR_IMM(bc);
 GEN_LD_ADDR_IMM(de);
-GEN_LD_ADDR_IMM(a);
 GEN_LD_ADDR_IMM(b);
 GEN_LD_ADDR_IMM(c); 
 GEN_LD_ADDR_IMM(d);
@@ -1519,7 +1548,7 @@ instruction_ptr opcode_table[256] = {
     [0x04] = INC_b, // INC B
     [0x05] = DEC_b, // DEC B
     [0x06] = LD_b_n, // LD B, n
-    [0x07] = NULL, // RLC A
+    [0x07] = RLC_a, // RLC A
     [0x08] = SV_nn_sp, // LD (nn), SP
     [0x09] = ADD_HL_bc, // ADD HL, BC
     [0x0A] = LD_a_bc, // LD A, (BC)
@@ -1527,7 +1556,7 @@ instruction_ptr opcode_table[256] = {
     [0x0C] = INC_c, // INC C
     [0x0D] = DEC_c, // DEC C
     [0x0E] = LD_c_n, // LD C, n
-    [0x0F] = NULL, // RRC A
+    [0x0F] = RRC_a, // RRC A
 
     // 0x1_
     [0x10] = STOP, // STOP
@@ -1537,7 +1566,7 @@ instruction_ptr opcode_table[256] = {
     [0x14] = INC_d, // INC D
     [0x15] = DEC_d, // DEC D
     [0x16] = LD_d_n, // LD D, n
-    [0x17] = NULL, // RL A
+    [0x17] = RL_a, // RL A
     [0x18] = JR, // JR n
     [0x19] = ADD_HL_de, // ADD HL, DE
     [0x1A] = LD_a_de, // LD A, (DE)
@@ -1545,7 +1574,7 @@ instruction_ptr opcode_table[256] = {
     [0x1C] = INC_e, // INC E
     [0x1D] = DEC_e, // DEC E
     [0x1E] = LD_e_n, // LD E, n
-    [0x1F] = NULL, // RR A
+    [0x1F] = RR_a, // RR A
 
     // 0x2_
     [0x20] = JR_COND, // JR NZ, n
@@ -1566,7 +1595,7 @@ instruction_ptr opcode_table[256] = {
     [0x2F] = CPL, // CPL
 
     // 0x3_
-    [0x30] = NULL, // JR NC, n
+    [0x30] = JR_COND, // JR NC, n
     [0x31] = LD_sp_nn, // LD SP, nn
     [0x32] = SVD_a_hl, // LDD (HL), A
     [0x33] = INC_sp, // INC SP
@@ -1574,7 +1603,7 @@ instruction_ptr opcode_table[256] = {
     [0x35] = DEC_REGhl, // DEC (HL)
     [0x36] = SV_hl_n, // LD (HL), n
     [0x37] = SCF, // SCF
-    [0x38] = NULL, // JR C, n
+    [0x38] = JR_COND, // JR C, n
     [0x39] = ADD_HL_sp, // ADD HL, SP
     [0x3A] = LDD_a_hl, // LDD A, (HL)
     [0x3B] = DEC_sp, // DEC SP
@@ -1728,40 +1757,40 @@ instruction_ptr opcode_table[256] = {
     [0xBF] = CP_A_a, // CP A
 
     // 0xC_ (Control Flow / Stack)
-    [0xC0] = NULL, // RET NZ
+    [0xC0] = RET_COND, // RET NZ
     [0xC1] = POP_bc, // POP BC
-    [0xC2] = NULL, // JP NZ, nn
+    [0xC2] = JP_COND, // JP NZ, nn
     [0xC3] = JP, // JP nn
-    [0xC4] = NULL, // CALL NZ, nn
+    [0xC4] = CALL_COND, // CALL NZ, nn
     [0xC5] = PUSH_bc, // PUSH BC
     [0xC6] = ADD_A_n, // ADD A, n
-    [0xC7] = NULL, // RST 0
-    [0xC8] = NULL, // RET Z
-    [0xC9] = NULL, // RET
-    [0xCA] = NULL, // JP Z, nn
+    [0xC7] = RST, // RST 0
+    [0xC8] = RET_COND, // RET Z
+    [0xC9] = RET, // RET
+    [0xCA] = JP_COND, // JP Z, nn
     [0xCB] = NULL, // Ext ops (Prefix CB)
-    [0xCC] = NULL, // CALL Z, nn
-    [0xCD] = NULL, // CALL nn
+    [0xCC] = CALL_COND, // CALL Z, nn
+    [0xCD] = CALL, // CALL nn
     [0xCE] = ADC_A_n, // ADC A, n
-    [0xCF] = NULL, // RST 8
+    [0xCF] = RST, // RST 8
 
     // 0xD_
-    [0xD0] = NULL, // RET NC
+    [0xD0] = RET_COND, // RET NC
     [0xD1] = POP_de, // POP DE
-    [0xD2] = NULL, // JP NC, nn
+    [0xD2] = JP_COND, // JP NC, nn
     [0xD3] = NULL, // XX (Invalid)
-    [0xD4] = NULL, // CALL NC, nn
+    [0xD4] = CALL_COND, // CALL NC, nn
     [0xD5] = PUSH_de, // PUSH DE
     [0xD6] = SUB_A_n, // SUB A, n
-    [0xD7] = NULL, // RST 10
-    [0xD8] = NULL, // RET C
-    [0xD9] = NULL, // RETI
-    [0xDA] = NULL, // JP C, nn
+    [0xD7] = RST, // RST 10
+    [0xD8] = RET_COND, // RET C
+    [0xD9] = RETI, // RETI
+    [0xDA] = JP_COND, // JP C, nn
     [0xDB] = NULL, // XX (Invalid)
-    [0xDC] = NULL, // CALL C, nn
+    [0xDC] = CALL_COND, // CALL C, nn
     [0xDD] = NULL, // XX (Invalid)
     [0xDE] = SBC_A_imm, // SBC A, n
-    [0xDF] = NULL, // RST 18
+    [0xDF] = RST, // RST 18
 
     // 0xE_
     [0xE0] = SVH_imm_a, // LDH (n), A
@@ -1771,15 +1800,15 @@ instruction_ptr opcode_table[256] = {
     [0xE4] = NULL, // XX (Invalid)
     [0xE5] = PUSH_hl, // PUSH HL
     [0xE6] = AND_A_n, // AND n
-    [0xE7] = NULL, // RST 20
+    [0xE7] = RST, // RST 20
     [0xE8] = NULL, // ADD SP, d
     [0xE9] = JP_hl, // JP (HL)
-    [0xEA] = SV_a_n, // LD (nn), A
+    [0xEA] = SV_nn_a, // LD (nn), A
     [0xEB] = NULL, // XX (Invalid)
     [0xEC] = NULL, // XX (Invalid)
     [0xED] = NULL, // XX (Invalid)
     [0xEE] = XOR_A_n, // XOR n
-    [0xEF] = NULL, // RST 28
+    [0xEF] = RST, // RST 28
 
     // 0xF_
     [0xF0] = LDH_imm_a, // LDH A, (n)
@@ -1789,7 +1818,7 @@ instruction_ptr opcode_table[256] = {
     [0xF4] = NULL, // XX (Invalid)
     [0xF5] = PUSH_af, // PUSH AF
     [0xF6] = OR_A_n, // OR n
-    [0xF7] = NULL, // RST 30
+    [0xF7] = RST, // RST 30
     [0xF8] = LDHL_sp_n, // LDHL SP, d
     [0xF9] = LD_sp_hl, // LD SP, HL
     [0xFA] = LD_a_nn, // LD A, (nn)
@@ -1797,7 +1826,7 @@ instruction_ptr opcode_table[256] = {
     [0xFC] = NULL, // XX (Invalid)
     [0xFD] = NULL, // XX (Invalid)
     [0xFE] = CP_A_n, // CP n
-    [0xFF] = NULL, // RST 38
+    [0xFF] = RST, // RST 38
 };
 
 instruction_ptr prefix_opcode_table[256] = {
