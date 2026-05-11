@@ -64,7 +64,6 @@ int save_byte(uint16_t address, uint16_t val){
     exit(EXIT_FAILURE);
 }
 
-
 // load inmediate value into register
 #define GEN_LD_N(reg_name) \
 void LD_##reg_name##_n() { \
@@ -485,12 +484,6 @@ void NOP(){
     
 }
 
-// Load value from A into memory in [HL], then increment HL
-void LDI_hl_a(){
-    save_byte(reg->hl, reg->a);
-    reg->hl++;
-}
-
 // Save value from A into memory in [0xFF00 + n], where n is an 8 bit immediate value
 void SVH_imm_a(){
     uint8_t address = 0xFF00 | read_byte(reg->pc++);
@@ -519,6 +512,30 @@ void LDHL_sp_n(){
 void SV_nn_sp(){
     uint16_t address = read_byte(reg->pc++) | (read_byte(reg->pc++) << 8);
     save_byte(address, reg->sp);
+}
+
+// Put value at address HL into A. Decrement HL
+void LDD_a_hl() {
+    reg->a = read_byte(reg->hl);
+    --reg->hl;
+}
+
+// Put A into memory address HL. Decrement HL.
+void SVD_a_hl() {
+    save_byte(reg->hl, reg->a);
+    --reg->hl;
+}
+
+// Put value at address HL into A. Increment HL
+void LDI_a_hl() {
+    reg->a = read_byte(reg->hl);
+    ++reg->hl;
+}
+
+// Put A into memory address HL. Increment HL.
+void SVI_a_hl() {
+    save_byte(reg->hl, reg->a);
+    ++reg->hl;
 }
 
 // Add to register a value from [hl]
@@ -1039,31 +1056,32 @@ void JP_hl() {
 
 // jp if some flags are set
 void JP_NZ() {
-    uint16_t address = read_byte(reg->pc++) | (read_byte(reg->pc) << 8);
-    if (!(reg->f & 0x80)){
+    bool condition_met = false;
+    switch (opcode)
+    {
+    case 0xC2:
+        if (!(reg->f & 0x80))
+            condition_met = true;
+        break;
+    case 0xCA:
+        if (reg->f & 0x80)
+            condition_met = true;
+        break;
+    case 0xD2:
+        if (!(reg->f & 0x10))
+            condition_met = true;
+        break;
+    case 0xDA:
+        if (reg->f & 0x10)
+            condition_met = true;
+        break;
+    
+    }
+    if(condition_met){
+        uint16_t address = read_byte(reg->pc++) | (read_byte(reg->pc) << 8);
         reg->pc = address;
-    } 
-}
-
-void JP_Z() {
-    uint16_t address = read_byte(reg->pc++) | (read_byte(reg->pc) << 8);
-    if (reg->f & 0x80){
-        reg->pc = address;
-    } 
-}
-
-void JP_NC() {
-    uint16_t address = read_byte(reg->pc++) | (read_byte(reg->pc) << 8);
-    if (!(reg->f & 0x10)){
-        reg->pc = address;
-    } 
-}
-
-void JP_C() {
-    uint16_t address = read_byte(reg->pc++) | (read_byte(reg->pc) << 8);
-    if (reg->f & 0x10){
-        reg->pc = address;
-    } 
+    }
+    
 }
 
 // add n to current address
@@ -1131,7 +1149,7 @@ void CALL_COND() {
         }
         break;
     case 0xD4:
-        if(!(reg->f & 010)) {
+        if(!(reg->f & 0x10)) {
             save_byte(--reg->sp, (reg->pc >> 8) & 0xFF);
             save_byte(--reg->sp, reg->pc & 0xFF);
             reg->pc = address;
@@ -1530,17 +1548,17 @@ instruction_ptr opcode_table[256] = {
     [0x1F] = NULL, // RR A
 
     // 0x2_
-    [0x20] = NULL, // JR NZ, n
+    [0x20] = JR_COND, // JR NZ, n
     [0x21] = LD_hl_nn, // LD HL, nn
-    [0x22] = LDI_hl_a, // LDI (HL), A
+    [0x22] = SVI_a_hl, // LDI (HL), A
     [0x23] = INC_hl, // INC HL
     [0x24] = INC_h, // INC H
     [0x25] = DEC_h, // DEC H
     [0x26] = LD_h_n, // LD H, n
     [0x27] = DAA, // DAA
-    [0x28] = NULL, // JR Z, n
+    [0x28] = JR_COND, // JR Z, n
     [0x29] = ADD_HL_hl, // ADD HL, HL
-    [0x2A] = NULL, // LDI A, (HL)
+    [0x2A] = LDI_a_hl, // LDI A, (HL)
     [0x2B] = DEC_hl, // DEC HL
     [0x2C] = INC_l, // INC L
     [0x2D] = DEC_l, // DEC L
@@ -1550,20 +1568,20 @@ instruction_ptr opcode_table[256] = {
     // 0x3_
     [0x30] = NULL, // JR NC, n
     [0x31] = LD_sp_nn, // LD SP, nn
-    [0x32] = NULL, // LDD (HL), A
+    [0x32] = SVD_a_hl, // LDD (HL), A
     [0x33] = INC_sp, // INC SP
     [0x34] = INC_REGhl, // INC (HL)
     [0x35] = DEC_REGhl, // DEC (HL)
     [0x36] = SV_hl_n, // LD (HL), n
-    [0x37] = NULL, // SCF
+    [0x37] = SCF, // SCF
     [0x38] = NULL, // JR C, n
     [0x39] = ADD_HL_sp, // ADD HL, SP
-    [0x3A] = NULL, // LDD A, (HL)
+    [0x3A] = LDD_a_hl, // LDD A, (HL)
     [0x3B] = DEC_sp, // DEC SP
     [0x3C] = INC_a, // INC A
     [0x3D] = DEC_a, // DEC A
     [0x3E] = LD_a_n, // LD A, n
-    [0x3F] = NULL, // CCF
+    [0x3F] = CCF, // CCF
 
     // 0x4_ (The LD B, r block)
     [0x40] = LD_b_b, // LD B, B
@@ -1626,7 +1644,7 @@ instruction_ptr opcode_table[256] = {
     [0x73] = SV_hl_e, // LD (HL), E
     [0x74] = SV_hl_h, // LD (HL), H
     [0x75] = SV_hl_l, // LD (HL), L
-    [0x76] = NULL, // HALT
+    [0x76] = HALT, // HALT
     [0x77] = SV_hl_a, // LD (HL), A
     [0x78] = LD_a_b, // LD A, B
     [0x79] = LD_a_c, // LD A, C
@@ -1772,7 +1790,7 @@ instruction_ptr opcode_table[256] = {
     [0xF5] = PUSH_af, // PUSH AF
     [0xF6] = OR_A_n, // OR n
     [0xF7] = NULL, // RST 30
-    [0xF8] = NULL, // LDHL SP, d
+    [0xF8] = LDHL_sp_n, // LDHL SP, d
     [0xF9] = LD_sp_hl, // LD SP, HL
     [0xFA] = LD_a_nn, // LD A, (nn)
     [0xFB] = EI, // EI (Enable Interrupts)
