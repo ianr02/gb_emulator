@@ -64,6 +64,11 @@ int save_byte(uint16_t address, uint16_t val){
     exit(EXIT_FAILURE);
 }
 
+void prefix_function() {
+    opcode = read_byte(reg->pc++);
+    prefix_opcode_table[opcode]();
+}
+
 // load inmediate value into register
 #define GEN_LD_N(reg_name) \
 void LD_##reg_name##_n() { \
@@ -358,55 +363,29 @@ void SL_##reg_name() { \
         reg->f |= 0x80; \
 }
 
-#define GEN_SRA_N(reg_name) \
+#define GEN_SRA_n(reg_name) \
 void SRA_##reg_name() { \
     uint8_t msb = reg->reg_name & 0x80; \
     uint8_t carry = reg->reg_name & 0x01; \
     reg->reg_name = msb | (reg->reg_name >> 1); \
     reg->f = (carry << 4); \
     if (reg->reg_name == 0x0) \
-        reg-> |= 0x80; \
+        reg->f |= 0x80; \
 }
 
-#define GEN_SRL_N(reg_name) \
+#define GEN_SRL_n(reg_name) \
 void SRL_##reg_name() { \
     uint8_t carry = reg->reg_name & 0x01; \
     reg->reg_name >>= 1; \
     reg->f = (carry << 4); \
     if (reg->reg_name == 0x0) \
-        reg-> |= 0x80; \
+        reg->f |= 0x80; \
 }
 
 #define GEN_BIT_n(reg_name) \
 void BIT_##reg_name() { \
-    uint8_t bit = read_byte(reg->pc++); \
-    uint8_t mask = 0x0; \
-    switch (bit) { \
-        case 0: \
-            mask = 0x01; \
-            break; \
-        case 1: \
-            mask = 0x02; \
-            break; \
-        case 2: \
-            mask = 0x04; \
-            break; \
-        case 3:  \
-            mask = 0x08; \
-            break; \
-        case 4: \
-            mask = 0x10; \
-            break; \
-        case 5: \
-            mask = 0x20; \
-            break; \
-        case 6: \
-            mask = 0x40; \
-            break; \
-        case 7: \
-            mask = 0x80; \
-            break; \
-    } \
+    uint8_t bit = (opcode >> 3) & 0x07; \
+    uint8_t mask = 1 << bit; \
     reg->f &= 0x10; \
     reg->f |= 0x20; \
     if (!(reg->reg_name & mask)) \
@@ -415,67 +394,15 @@ void BIT_##reg_name() { \
 
 #define GEN_SET_n(reg_name) \
 void SET_##reg_name() { \
-    uint8_t bit = read_byte(reg->pc++); \
-    uint8_t mask = 0x0; \
-    switch (bit) { \
-        case 0: \
-            mask = 0x01; \
-            break; \
-        case 1: \
-            mask = 0x02; \
-            break; \
-        case 2: \
-            mask = 0x04; \
-            break; \
-        case 3:  \
-            mask = 0x08; \
-            break; \
-        case 4: \
-            mask = 0x10; \
-            break; \
-        case 5: \
-            mask = 0x20; \
-            break; \
-        case 6: \
-            mask = 0x40; \
-            break; \
-        case 7: \
-            mask = 0x80; \
-            break; \
-    } \
+    uint8_t bit = (opcode >> 3) & 0x07; \
+    uint8_t mask = 1 << bit; \
     reg->reg_name |= mask; \
 }
 
 #define GEN_RESET_n(reg_name) \
 void RESET_##reg_name() { \
-    uint8_t bit = read_byte(reg->pc++); \
-    uint8_t mask = 0x0; \
-    switch (bit) { \
-        case 0:  \
-            mask = 0xFE; \
-            break; \
-        case 1: \
-            mask = 0xFD; \
-            break; \
-        case 2: \
-            mask = 0xFB; \
-            break; \
-        case 3:  \
-            mask = 0xF7; \
-            break; \
-        case 4: \
-            mask = 0xEF; \
-            break; \
-        case 5: \
-            mask = 0xDF; \
-            break; \
-        case 6: \
-            mask = 0xBF; \
-            break; \
-        case 7: \
-            mask = 0x7F; \
-            break; \
-    } \
+    uint8_t bit = (opcode >> 3) & 0x07; \
+    uint8_t mask = ~(1 << bit); \
     reg->reg_name &= mask;\
 }
 
@@ -943,34 +870,8 @@ void SRL_hl() {
 // tests bit n in [hl]
 void BIT_hl() { 
     uint8_t val = read_byte(reg->hl);
-    uint8_t bit = read_byte(reg->pc++); 
-    uint8_t mask = 0x0; 
-    switch (bit) { 
-        case 0: 
-            mask = 0x01; 
-            break; 
-        case 1: 
-            mask = 0x02; 
-            break; 
-        case 2: 
-            mask = 0x04; 
-            break; 
-        case 3:  
-            mask = 0x08; 
-            break; 
-        case 4: 
-            mask = 0x10; 
-            break; 
-        case 5: 
-            mask = 0x20; 
-            break; 
-        case 6: 
-            mask = 0x40; 
-            break; 
-        case 7: 
-            mask = 0x80; 
-            break; 
-    } 
+    uint8_t bit = (opcode >> 3) & 0x07; 
+    uint8_t mask = 1 << bit;
     reg->f &= 0x10; 
     reg->f |= 0x20; 
     if (!(val & mask))
@@ -980,34 +881,8 @@ void BIT_hl() {
 // set bit n in [hl]
 void SET_hl() { \
     uint8_t val = read_byte(reg->hl);
-    uint8_t bit = read_byte(reg->pc++); 
-    uint8_t mask = 0x0; 
-    switch (bit) { 
-        case 0: 
-            mask = 0x01; 
-            break; 
-        case 1: 
-            mask = 0x02; 
-            break; 
-        case 2: 
-            mask = 0x04; 
-            break; 
-        case 3:  
-            mask = 0x08; 
-            break; 
-        case 4: 
-            mask = 0x10; 
-            break; 
-        case 5: 
-            mask = 0x20; 
-            break; 
-        case 6: 
-            mask = 0x40; 
-            break; 
-        case 7: 
-            mask = 0x80; 
-            break; 
-    } 
+    uint8_t bit = (opcode >> 3) & 0x07; 
+    uint8_t mask = 1 << bit;
     val |= mask; 
     save_byte(reg->hl, val);
 }
@@ -1015,34 +890,8 @@ void SET_hl() { \
 // reset bit n in [hl]
 void RESET_hl() { \
     uint8_t val = read_byte(reg->hl);
-    uint8_t bit = read_byte(reg->pc++); 
-    uint8_t mask = 0x0; 
-    switch (bit) { 
-        case 0: 
-            mask = 0xFE; 
-            break; 
-        case 1: 
-            mask = 0xFD; 
-            break; 
-        case 2: 
-            mask = 0xFB; 
-            break; 
-        case 3:  
-            mask = 0xF7; 
-            break; 
-        case 4: 
-            mask = 0xEF; 
-            break; 
-        case 5: 
-            mask = 0xDF; 
-            break; 
-        case 6: 
-            mask = 0xBF; 
-            break; 
-        case 7: 
-            mask = 0x7F; 
-            break; 
-    } 
+    uint8_t bit = (opcode >> 3) & 0x07; 
+    uint8_t mask = ~(1 << bit);
     val &= mask;
     save_byte(reg->hl, val);
 }
@@ -1263,6 +1112,39 @@ GEN_BIT_n(d);
 GEN_BIT_n(e);
 GEN_BIT_n(h);
 GEN_BIT_n(l);
+
+GEN_SWAP_REG(a);
+GEN_SWAP_REG(b);
+GEN_SWAP_REG(c);
+GEN_SWAP_REG(d);
+GEN_SWAP_REG(e);
+GEN_SWAP_REG(h);
+GEN_SWAP_REG(l);
+
+GEN_SRL_n(a);
+GEN_SRL_n(b);
+GEN_SRL_n(c);
+GEN_SRL_n(d);
+GEN_SRL_n(e);
+GEN_SRL_n(h);
+GEN_SRL_n(l);
+
+
+GEN_SRA_n(a);
+GEN_SRA_n(b);
+GEN_SRA_n(c);
+GEN_SRA_n(d);
+GEN_SRA_n(e);
+GEN_SRA_n(h);
+GEN_SRA_n(l);
+
+GEN_SL_n(a);
+GEN_SL_n(b);
+GEN_SL_n(c);
+GEN_SL_n(d);
+GEN_SL_n(e);
+GEN_SL_n(h);
+GEN_SL_n(l);
 
 GEN_RR_n(a);
 GEN_RR_n(b);
@@ -1767,7 +1649,7 @@ instruction_ptr opcode_table[256] = {
     [0xC8] = RET_COND, // RET Z
     [0xC9] = RET, // RET
     [0xCA] = JP_COND, // JP Z, nn
-    [0xCB] = NULL, // Ext ops (Prefix CB)
+    [0xCB] = prefix_function, // Ext ops (Prefix CB)
     [0xCC] = CALL_COND, // CALL Z, nn
     [0xCD] = CALL, // CALL nn
     [0xCE] = ADC_A_n, // ADC A, n
@@ -1830,292 +1712,292 @@ instruction_ptr opcode_table[256] = {
 
 instruction_ptr prefix_opcode_table[256] = {
     // 0x0_ (Rotates & Shifts)
-    [0x00] = NULL, // RLC B
-    [0x01] = NULL, // RLC C
-    [0x02] = NULL, // RLC D
-    [0x03] = NULL, // RLC E
-    [0x04] = NULL, // RLC H
-    [0x05] = NULL, // RLC L
-    [0x06] = NULL, // RLC (HL)
-    [0x07] = NULL, // RLC A
-    [0x08] = NULL, // RRC B
-    [0x09] = NULL, // RRC C
-    [0x0A] = NULL, // RRC D
-    [0x0B] = NULL, // RRC E
-    [0x0C] = NULL, // RRC H
-    [0x0D] = NULL, // RRC L
-    [0x0E] = NULL, // RRC (HL)
-    [0x0F] = NULL, // RRC A
+    [0x00] = RLC_b, // RLC B
+    [0x01] = RLC_c, // RLC C
+    [0x02] = RLC_d, // RLC D
+    [0x03] = RLC_e, // RLC E
+    [0x04] = RLC_h, // RLC H
+    [0x05] = RLC_l, // RLC L
+    [0x06] = RCL_hl, // RLC (HL)
+    [0x07] = RLC_a, // RLC A
+    [0x08] = RRC_b, // RRC B
+    [0x09] = RRC_c, // RRC C
+    [0x0A] = RRC_d, // RRC D
+    [0x0B] = RRC_e, // RRC E
+    [0x0C] = RRC_h, // RRC H
+    [0x0D] = RRC_l, // RRC L
+    [0x0E] = RRC_hl, // RRC (HL)
+    [0x0F] = RR_a, // RRC A
 
     // 0x1_ (Rotates & Shifts through Carry)
-    [0x10] = NULL, // RL B
-    [0x11] = NULL, // RL C
-    [0x12] = NULL, // RL D
-    [0x13] = NULL, // RL E
-    [0x14] = NULL, // RL H
-    [0x15] = NULL, // RL L
-    [0x16] = NULL, // RL (HL)
-    [0x17] = NULL, // RL A
-    [0x18] = NULL, // RR B
-    [0x19] = NULL, // RR C
-    [0x1A] = NULL, // RR D
-    [0x1B] = NULL, // RR E
-    [0x1C] = NULL, // RR H
-    [0x1D] = NULL, // RR L
-    [0x1E] = NULL, // RR (HL)
-    [0x1F] = NULL, // RR A
+    [0x10] = RL_b, // RL B
+    [0x11] = RL_c, // RL C
+    [0x12] = RL_d, // RL D
+    [0x13] = RL_e, // RL E
+    [0x14] = RL_h, // RL H
+    [0x15] = RL_l, // RL L
+    [0x16] = RL_hl, // RL (HL)
+    [0x17] = RL_a, // RL A
+    [0x18] = RR_b, // RR B
+    [0x19] = RR_c, // RR C
+    [0x1A] = RR_d, // RR D
+    [0x1B] = RR_e, // RR E
+    [0x1C] = RR_h, // RR H
+    [0x1D] = RR_l, // RR L
+    [0x1E] = RR_hl, // RR (HL)
+    [0x1F] = RR_a, // RR A
 
     // 0x2_ (Arithmetic Shifts)
-    [0x20] = NULL, // SLA B
-    [0x21] = NULL, // SLA C
-    [0x22] = NULL, // SLA D
-    [0x23] = NULL, // SLA E
-    [0x24] = NULL, // SLA H
-    [0x25] = NULL, // SLA L
-    [0x26] = NULL, // SLA (HL)
-    [0x27] = NULL, // SLA A
-    [0x28] = NULL, // SRA B
-    [0x29] = NULL, // SRA C
-    [0x2A] = NULL, // SRA D
-    [0x2B] = NULL, // SRA E
-    [0x2C] = NULL, // SRA H
-    [0x2D] = NULL, // SRA L
-    [0x2E] = NULL, // SRA (HL)
-    [0x2F] = NULL, // SRA A
+    [0x20] = SL_b, // SLA B
+    [0x21] = SL_c, // SLA C
+    [0x22] = SL_d, // SLA Dj
+    [0x23] = SL_e, // SLA E
+    [0x24] = SL_h, // SLA H
+    [0x25] = SL_l, // SLA L
+    [0x26] = SL_hl, // SLA (HL)
+    [0x27] = SL_a, // SLA A
+    [0x28] = SRA_b, // SRA B
+    [0x29] = SRA_c, // SRA C
+    [0x2A] = SRA_d, // SRA D
+    [0x2B] = SRA_e, // SRA E
+    [0x2C] = SRA_h, // SRA H
+    [0x2D] = SRA_l, // SRA L
+    [0x2E] = SRA_hl, // SRA (HL)
+    [0x2F] = SRA_a, // SRA A
 
     // 0x3_ (Swaps & Logical Shifts)
-    [0x30] = NULL, // SWAP B
-    [0x31] = NULL, // SWAP C
-    [0x32] = NULL, // SWAP D
-    [0x33] = NULL, // SWAP E
-    [0x34] = NULL, // SWAP H
-    [0x35] = NULL, // SWAP L
-    [0x36] = NULL, // SWAP (HL)
-    [0x37] = NULL, // SWAP A
-    [0x38] = NULL, // SRL B
-    [0x39] = NULL, // SRL C
-    [0x3A] = NULL, // SRL D
-    [0x3B] = NULL, // SRL E
-    [0x3C] = NULL, // SRL H
-    [0x3D] = NULL, // SRL L
-    [0x3E] = NULL, // SRL (HL)
-    [0x3F] = NULL, // SRL A
+    [0x30] = SWAP_b, // SWAP B
+    [0x31] = SWAP_c, // SWAP C
+    [0x32] = SWAP_d, // SWAP D
+    [0x33] = SWAP_e, // SWAP E
+    [0x34] = SWAP_h, // SWAP H
+    [0x35] = SWAP_l, // SWAP L
+    [0x36] = SWAP_hl, // SWAP (HL)
+    [0x37] = SWAP_a, // SWAP A
+    [0x38] = SRL_b, // SRL B
+    [0x39] = SRL_c, // SRL C
+    [0x3A] = SRL_d, // SRL D
+    [0x3B] = SRL_e, // SRL E
+    [0x3C] = SRL_h, // SRL H
+    [0x3D] = SRL_l, // SRL L
+    [0x3E] = SRL_hl, // SRL (HL)
+    [0x3F] = SRL_a, // SRL A
 
     // 0x4_ (BIT 0 and BIT 1)
-    [0x40] = NULL, // BIT 0, B
-    [0x41] = NULL, // BIT 0, C
-    [0x42] = NULL, // BIT 0, D
-    [0x43] = NULL, // BIT 0, E
-    [0x44] = NULL, // BIT 0, H
-    [0x45] = NULL, // BIT 0, L
-    [0x46] = NULL, // BIT 0, (HL)
-    [0x47] = NULL, // BIT 0, A
-    [0x48] = NULL, // BIT 1, B
-    [0x49] = NULL, // BIT 1, C
-    [0x4A] = NULL, // BIT 1, D
-    [0x4B] = NULL, // BIT 1, E
-    [0x4C] = NULL, // BIT 1, H
-    [0x4D] = NULL, // BIT 1, L
-    [0x4E] = NULL, // BIT 1, (HL)
-    [0x4F] = NULL, // BIT 1, A
+    [0x40] = BIT_b, // BIT 0, B
+    [0x41] = BIT_c, // BIT 0, C
+    [0x42] = BIT_d, // BIT 0, D
+    [0x43] = BIT_e, // BIT 0, E
+    [0x44] = BIT_h, // BIT 0, H
+    [0x45] = BIT_l, // BIT 0, L
+    [0x46] = BIT_hl, // BIT 0, (HL)
+    [0x47] = BIT_a, // BIT 0, A
+    [0x48] = BIT_b, // BIT 1, B
+    [0x49] = BIT_c, // BIT 1, C
+    [0x4A] = BIT_d, // BIT 1, D
+    [0x4B] = BIT_e, // BIT 1, E
+    [0x4C] = BIT_h, // BIT 1, H
+    [0x4D] = BIT_l, // BIT 1, L
+    [0x4E] = BIT_hl, // BIT 1, (HL)
+    [0x4F] = BIT_a, // BIT 1, A
 
     // 0x5_ (BIT 2 and BIT 3)
-    [0x50] = NULL, // BIT 2, B
-    [0x51] = NULL, // BIT 2, C
-    [0x52] = NULL, // BIT 2, D
-    [0x53] = NULL, // BIT 2, E
-    [0x54] = NULL, // BIT 2, H
-    [0x55] = NULL, // BIT 2, L
-    [0x56] = NULL, // BIT 2, (HL)
-    [0x57] = NULL, // BIT 2, A
-    [0x58] = NULL, // BIT 3, B
-    [0x59] = NULL, // BIT 3, C
-    [0x5A] = NULL, // BIT 3, D
-    [0x5B] = NULL, // BIT 3, E
-    [0x5C] = NULL, // BIT 3, H
-    [0x5D] = NULL, // BIT 3, L
-    [0x5E] = NULL, // BIT 3, (HL)
-    [0x5F] = NULL, // BIT 3, A
+    [0x50] = BIT_b, // BIT 2, B
+    [0x51] = BIT_c, // BIT 2, C
+    [0x52] = BIT_d, // BIT 2, D
+    [0x53] = BIT_e, // BIT 2, E
+    [0x54] = BIT_h, // BIT 2, H
+    [0x55] = BIT_l, // BIT 2, L
+    [0x56] = BIT_hl, // BIT 2, (HL)
+    [0x57] = BIT_a, // BIT 2, A
+    [0x58] = BIT_b, // BIT 3, B
+    [0x59] = BIT_c, // BIT 3, C
+    [0x5A] = BIT_d, // BIT 3, D
+    [0x5B] = BIT_e, // BIT 3, E
+    [0x5C] = BIT_h, // BIT 3, H
+    [0x5D] = BIT_l, // BIT 3, L
+    [0x5E] = BIT_hl, // BIT 3, (HL)
+    [0x5F] = BIT_a, // BIT 3, A
 
     // 0x6_ (BIT 4 and BIT 5)
-    [0x60] = NULL, // BIT 4, B
-    [0x61] = NULL, // BIT 4, C
-    [0x62] = NULL, // BIT 4, D
-    [0x63] = NULL, // BIT 4, E
-    [0x64] = NULL, // BIT 4, H
-    [0x65] = NULL, // BIT 4, L
-    [0x66] = NULL, // BIT 4, (HL)
-    [0x67] = NULL, // BIT 4, A
-    [0x68] = NULL, // BIT 5, B
-    [0x69] = NULL, // BIT 5, C
-    [0x6A] = NULL, // BIT 5, D
-    [0x6B] = NULL, // BIT 5, E
-    [0x6C] = NULL, // BIT 5, H
-    [0x6D] = NULL, // BIT 5, L
-    [0x6E] = NULL, // BIT 5, (HL)
-    [0x6F] = NULL, // BIT 5, A
+    [0x60] = BIT_b, // BIT 4, B
+    [0x61] = BIT_c, // BIT 4, C
+    [0x62] = BIT_d, // BIT 4, D
+    [0x63] = BIT_e, // BIT 4, E
+    [0x64] = BIT_h, // BIT 4, H
+    [0x65] = BIT_l, // BIT 4, L
+    [0x66] = BIT_hl, // BIT 4, (HL)
+    [0x67] = BIT_a, // BIT 4, A
+    [0x68] = BIT_b, // BIT 5, B
+    [0x69] = BIT_c, // BIT 5, C
+    [0x6A] = BIT_d, // BIT 5, D
+    [0x6B] = BIT_e, // BIT 5, E
+    [0x6C] = BIT_h, // BIT 5, H
+    [0x6D] = BIT_l, // BIT 5, L
+    [0x6E] = BIT_hl, // BIT 5, (HL)
+    [0x6F] = BIT_a, // BIT 5, A
 
     // 0x7_ (BIT 6 and BIT 7)
-    [0x70] = NULL, // BIT 6, B
-    [0x71] = NULL, // BIT 6, C
-    [0x72] = NULL, // BIT 6, D
-    [0x73] = NULL, // BIT 6, E
-    [0x74] = NULL, // BIT 6, H
-    [0x75] = NULL, // BIT 6, L
-    [0x76] = NULL, // BIT 6, (HL)
-    [0x77] = NULL, // BIT 6, A
-    [0x78] = NULL, // BIT 7, B
-    [0x79] = NULL, // BIT 7, C
-    [0x7A] = NULL, // BIT 7, D
-    [0x7B] = NULL, // BIT 7, E
-    [0x7C] = NULL, // BIT 7, H
-    [0x7D] = NULL, // BIT 7, L
-    [0x7E] = NULL, // BIT 7, (HL)
-    [0x7F] = NULL, // BIT 7, A
+    [0x70] = BIT_b, // BIT 6, B
+    [0x71] = BIT_c, // BIT 6, C
+    [0x72] = BIT_d, // BIT 6, D
+    [0x73] = BIT_e, // BIT 6, E
+    [0x74] = BIT_h, // BIT 6, H
+    [0x75] = BIT_l, // BIT 6, L
+    [0x76] = BIT_hl, // BIT 6, (HL)
+    [0x77] = BIT_a, // BIT 6, A
+    [0x78] = BIT_b, // BIT 7, B
+    [0x79] = BIT_c, // BIT 7, C
+    [0x7A] = BIT_d, // BIT 7, D
+    [0x7B] = BIT_e, // BIT 7, E
+    [0x7C] = BIT_h, // BIT 7, H
+    [0x7D] = BIT_l, // BIT 7, L
+    [0x7E] = BIT_hl, // BIT 7, (HL)
+    [0x7F] = BIT_a, // BIT 7, A
 
     // 0x8_ (RES 0 and RES 1)
-    [0x80] = NULL, // RES 0, B
-    [0x81] = NULL, // RES 0, C
-    [0x82] = NULL, // RES 0, D
-    [0x83] = NULL, // RES 0, E
-    [0x84] = NULL, // RES 0, H
-    [0x85] = NULL, // RES 0, L
-    [0x86] = NULL, // RES 0, (HL)
-    [0x87] = NULL, // RES 0, A
-    [0x88] = NULL, // RES 1, B
-    [0x89] = NULL, // RES 1, C
-    [0x8A] = NULL, // RES 1, D
-    [0x8B] = NULL, // RES 1, E
-    [0x8C] = NULL, // RES 1, H
-    [0x8D] = NULL, // RES 1, L
-    [0x8E] = NULL, // RES 1, (HL)
-    [0x8F] = NULL, // RES 1, A
+    [0x80] = RESET_b, // RES 0, B
+    [0x81] = RESET_c, // RES 0, C
+    [0x82] = RESET_d, // RES 0, D
+    [0x83] = RESET_e, // RES 0, E
+    [0x84] = RESET_h, // RES 0, H
+    [0x85] = RESET_l, // RES 0, L
+    [0x86] = RESET_hl, // RES 0, (HL)
+    [0x87] = RESET_a, // RES 0, A
+    [0x88] = RESET_b, // RES 1, B
+    [0x89] = RESET_c, // RES 1, C
+    [0x8A] = RESET_d, // RES 1, D
+    [0x8B] = RESET_e, // RES 1, E
+    [0x8C] = RESET_h, // RES 1, H
+    [0x8D] = RESET_l, // RES 1, L
+    [0x8E] = RESET_hl, // RES 1, (HL)
+    [0x8F] = RESET_a, // RES 1, A
 
     // 0x9_ (RES 2 and RES 3)
-    [0x90] = NULL, // RES 2, B
-    [0x91] = NULL, // RES 2, C
-    [0x92] = NULL, // RES 2, D
-    [0x93] = NULL, // RES 2, E
-    [0x94] = NULL, // RES 2, H
-    [0x95] = NULL, // RES 2, L
-    [0x96] = NULL, // RES 2, (HL)
-    [0x97] = NULL, // RES 2, A
-    [0x98] = NULL, // RES 3, B
-    [0x99] = NULL, // RES 3, C
-    [0x9A] = NULL, // RES 3, D
-    [0x9B] = NULL, // RES 3, E
-    [0x9C] = NULL, // RES 3, H
-    [0x9D] = NULL, // RES 3, L
-    [0x9E] = NULL, // RES 3, (HL)
-    [0x9F] = NULL, // RES 3, A
+    [0x90] = RESET_b, // RES 2, B
+    [0x91] = RESET_c, // RES 2, C
+    [0x92] = RESET_d, // RES 2, D
+    [0x93] = RESET_e, // RES 2, E
+    [0x94] = RESET_h, // RES 2, H
+    [0x95] = RESET_l, // RES 2, L
+    [0x96] = RESET_hl, // RES 2, (HL)
+    [0x97] = RESET_a, // RES 2, A
+    [0x98] = RESET_b, // RES 3, B
+    [0x99] = RESET_c, // RES 3, C
+    [0x9A] = RESET_d, // RES 3, D
+    [0x9B] = RESET_e, // RES 3, E
+    [0x9C] = RESET_h, // RES 3, H
+    [0x9D] = RESET_l, // RES 3, L
+    [0x9E] = RESET_hl, // RES 3, (HL)
+    [0x9F] = RESET_a, // RES 3, A
 
     // 0xA_ (RES 4 and RES 5)
-    [0xA0] = NULL, // RES 4, B
-    [0xA1] = NULL, // RES 4, C
-    [0xA2] = NULL, // RES 4, D
-    [0xA3] = NULL, // RES 4, E
-    [0xA4] = NULL, // RES 4, H
-    [0xA5] = NULL, // RES 4, L
-    [0xA6] = NULL, // RES 4, (HL)
-    [0xA7] = NULL, // RES 4, A
-    [0xA8] = NULL, // RES 5, B
-    [0xA9] = NULL, // RES 5, C
-    [0xAA] = NULL, // RES 5, D
-    [0xAB] = NULL, // RES 5, E
-    [0xAC] = NULL, // RES 5, H
-    [0xAD] = NULL, // RES 5, L
-    [0xAE] = NULL, // RES 5, (HL)
-    [0xAF] = NULL, // RES 5, A
+    [0xA0] = RESET_b, // RES 4, B
+    [0xA1] = RESET_c, // RES 4, C
+    [0xA2] = RESET_d, // RES 4, D
+    [0xA3] = RESET_e, // RES 4, E
+    [0xA4] = RESET_h, // RES 4, H
+    [0xA5] = RESET_l, // RES 4, L
+    [0xA6] = RESET_hl, // RES 4, (HL)
+    [0xA7] = RESET_a, // RES 4, A
+    [0xA8] = RESET_b, // RES 5, B
+    [0xA9] = RESET_c, // RES 5, C
+    [0xAA] = RESET_d, // RES 5, D
+    [0xAB] = RESET_e, // RES 5, E
+    [0xAC] = RESET_h, // RES 5, H
+    [0xAD] = RESET_l, // RES 5, L
+    [0xAE] = RESET_hl, // RES 5, (HL)
+    [0xAF] = RESET_a, // RES 5, A
 
     // 0xB_ (RES 6 and RES 7)
-    [0xB0] = NULL, // RES 6, B
-    [0xB1] = NULL, // RES 6, C
-    [0xB2] = NULL, // RES 6, D
-    [0xB3] = NULL, // RES 6, E
-    [0xB4] = NULL, // RES 6, H
-    [0xB5] = NULL, // RES 6, L
-    [0xB6] = NULL, // RES 6, (HL)
-    [0xB7] = NULL, // RES 6, A
-    [0xB8] = NULL, // RES 7, B
-    [0xB9] = NULL, // RES 7, C
-    [0xBA] = NULL, // RES 7, D
-    [0xBB] = NULL, // RES 7, E
-    [0xBC] = NULL, // RES 7, H
-    [0xBD] = NULL, // RES 7, L
-    [0xBE] = NULL, // RES 7, (HL)
-    [0xBF] = NULL, // RES 7, A
+    [0xB0] = RESET_b, // RES 6, B
+    [0xB1] = RESET_c, // RES 6, C
+    [0xB2] = RESET_d, // RES 6, D
+    [0xB3] = RESET_e, // RES 6, E
+    [0xB4] = RESET_h, // RES 6, H
+    [0xB5] = RESET_l, // RES 6, L
+    [0xB6] = RESET_hl, // RES 6, (HL)
+    [0xB7] = RESET_a, // RES 6, A
+    [0xB8] = RESET_b, // RES 7, B
+    [0xB9] = RESET_c, // RES 7, C
+    [0xBA] = RESET_d, // RES 7, D
+    [0xBB] = RESET_e, // RES 7, E
+    [0xBC] = RESET_h, // RES 7, H
+    [0xBD] = RESET_l, // RES 7, L
+    [0xBE] = RESET_hl, // RES 7, (HL)
+    [0xBF] = RESET_a, // RES 7, A
 
     // 0xC_ (SET 0 and SET 1)
-    [0xC0] = NULL, // SET 0, B
-    [0xC1] = NULL, // SET 0, C
-    [0xC2] = NULL, // SET 0, D
-    [0xC3] = NULL, // SET 0, E
-    [0xC4] = NULL, // SET 0, H
-    [0xC5] = NULL, // SET 0, L
-    [0xC6] = NULL, // SET 0, (HL)
-    [0xC7] = NULL, // SET 0, A
-    [0xC8] = NULL, // SET 1, B
-    [0xC9] = NULL, // SET 1, C
-    [0xCA] = NULL, // SET 1, D
-    [0xCB] = NULL, // SET 1, E
-    [0xCC] = NULL, // SET 1, H
-    [0xCD] = NULL, // SET 1, L
-    [0xCE] = NULL, // SET 1, (HL)
-    [0xCF] = NULL, // SET 1, A
+    [0xC0] = SET_b, // SET 0, B
+    [0xC1] = SET_c, // SET 0, C
+    [0xC2] = SET_d, // SET 0, D
+    [0xC3] = SET_e, // SET 0, E
+    [0xC4] = SET_h, // SET 0, H
+    [0xC5] = SET_l, // SET 0, L
+    [0xC6] = SET_hl, // SET 0, (HL)
+    [0xC7] = SET_a, // SET 0, A
+    [0xC8] = SET_b, // SET 1, B
+    [0xC9] = SET_c, // SET 1, C
+    [0xCA] = SET_d, // SET 1, D
+    [0xCB] = SET_e, // SET 1, E
+    [0xCC] = SET_h, // SET 1, H
+    [0xCD] = SET_l, // SET 1, L
+    [0xCE] = SET_hl, // SET 1, (HL)
+    [0xCF] = SET_a, // SET 1, A
 
-    // 0xD_ (SET 2 and SET 3)
-    [0xD0] = NULL, // SET 2, B
-    [0xD1] = NULL, // SET 2, C
-    [0xD2] = NULL, // SET 2, D
-    [0xD3] = NULL, // SET 2, E
-    [0xD4] = NULL, // SET 2, H
-    [0xD5] = NULL, // SET 2, L
-    [0xD6] = NULL, // SET 2, (HL)
-    [0xD7] = NULL, // SET 2, A
-    [0xD8] = NULL, // SET 3, B
-    [0xD9] = NULL, // SET 3, C
-    [0xDA] = NULL, // SET 3, D
-    [0xDB] = NULL, // SET 3, E
-    [0xDC] = NULL, // SET 3, H
-    [0xDD] = NULL, // SET 3, L
-    [0xDE] = NULL, // SET 3, (HL)
-    [0xDF] = NULL, // SET 3, A
+   // 0xD_ (SET 2 and SET 3)
+    [0xD0] = SET_b,  // SET 2, B
+    [0xD1] = SET_c,  // SET 2, C
+    [0xD2] = SET_d,  // SET 2, D
+    [0xD3] = SET_e,  // SET 2, E
+    [0xD4] = SET_h,  // SET 2, H
+    [0xD5] = SET_l,  // SET 2, L
+    [0xD6] = SET_hl, // SET 2, (HL)
+    [0xD7] = SET_a,  // SET 2, A
+    [0xD8] = SET_b,  // SET 3, B
+    [0xD9] = SET_c,  // SET 3, C
+    [0xDA] = SET_d,  // SET 3, D
+    [0xDB] = SET_e,  // SET 3, E
+    [0xDC] = SET_h,  // SET 3, H
+    [0xDD] = SET_l,  // SET 3, L
+    [0xDE] = SET_hl, // SET 3, (HL)
+    [0xDF] = SET_a,  // SET 3, A
 
     // 0xE_ (SET 4 and SET 5)
-    [0xE0] = NULL, // SET 4, B
-    [0xE1] = NULL, // SET 4, C
-    [0xE2] = NULL, // SET 4, D
-    [0xE3] = NULL, // SET 4, E
-    [0xE4] = NULL, // SET 4, H
-    [0xE5] = NULL, // SET 4, L
-    [0xE6] = NULL, // SET 4, (HL)
-    [0xE7] = NULL, // SET 4, A
-    [0xE8] = NULL, // SET 5, B
-    [0xE9] = NULL, // SET 5, C
-    [0xEA] = NULL, // SET 5, D
-    [0xEB] = NULL, // SET 5, E
-    [0xEC] = NULL, // SET 5, H
-    [0xED] = NULL, // SET 5, L
-    [0xEE] = NULL, // SET 5, (HL)
-    [0xEF] = NULL, // SET 5, A
+    [0xE0] = SET_b,  // SET 4, B
+    [0xE1] = SET_c,  // SET 4, C
+    [0xE2] = SET_d,  // SET 4, D
+    [0xE3] = SET_e,  // SET 4, E
+    [0xE4] = SET_h,  // SET 4, H
+    [0xE5] = SET_l,  // SET 4, L
+    [0xE6] = SET_hl, // SET 4, (HL)
+    [0xE7] = SET_a,  // SET 4, A
+    [0xE8] = SET_b,  // SET 5, B
+    [0xE9] = SET_c,  // SET 5, C
+    [0xEA] = SET_d,  // SET 5, D
+    [0xEB] = SET_e,  // SET 5, E
+    [0xEC] = SET_h,  // SET 5, H
+    [0xED] = SET_l,  // SET 5, L
+    [0xEE] = SET_hl, // SET 5, (HL)
+    [0xEF] = SET_a,  // SET 5, A
 
     // 0xF_ (SET 6 and SET 7)
-    [0xF0] = NULL, // SET 6, B
-    [0xF1] = NULL, // SET 6, C
-    [0xF2] = NULL, // SET 6, D
-    [0xF3] = NULL, // SET 6, E
-    [0xF4] = NULL, // SET 6, H
-    [0xF5] = NULL, // SET 6, L
-    [0xF6] = NULL, // SET 6, (HL)
-    [0xF7] = NULL, // SET 6, A
-    [0xF8] = NULL, // SET 7, B
-    [0xF9] = NULL, // SET 7, C
-    [0xFA] = NULL, // SET 7, D
-    [0xFB] = NULL, // SET 7, E
-    [0xFC] = NULL, // SET 7, H
-    [0xFD] = NULL, // SET 7, L
-    [0xFE] = NULL, // SET 7, (HL)
-    [0xFF] = NULL, // SET 7, A
+    [0xF0] = SET_b,  // SET 6, B
+    [0xF1] = SET_c,  // SET 6, C
+    [0xF2] = SET_d,  // SET 6, D
+    [0xF3] = SET_e,  // SET 6, E
+    [0xF4] = SET_h,  // SET 6, H
+    [0xF5] = SET_l,  // SET 6, L
+    [0xF6] = SET_hl, // SET 6, (HL)
+    [0xF7] = SET_a,  // SET 6, A
+    [0xF8] = SET_b,  // SET 7, B
+    [0xF9] = SET_c,  // SET 7, C
+    [0xFA] = SET_d,  // SET 7, D
+    [0xFB] = SET_e,  // SET 7, E
+    [0xFC] = SET_h,  // SET 7, H
+    [0xFD] = SET_l,  // SET 7, L
+    [0xFE] = SET_hl, // SET 7, (HL)
+    [0xFF] = SET_a,  // SET 7, A
 };
 
 #endif
