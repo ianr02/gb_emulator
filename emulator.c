@@ -26,7 +26,6 @@ int main(int argc, char *argv[]) {
     bool go = true;
     while(go){
         opcode = read_byte(reg->pc);
-
         printf("PC: 0x%04X | Opcode: 0x%02X\n", reg->pc, opcode);
         ++reg->pc;
         if (opcode_table[opcode] != NULL) {
@@ -35,7 +34,6 @@ int main(int argc, char *argv[]) {
             printf("Error: Unimplemented Opcode 0x%02X at 0x%04X\n", opcode, reg->pc - 1);
             exit(EXIT_FAILURE);
         }
-        printf("h\n");
     }
     fclose(file);
     free(memory);

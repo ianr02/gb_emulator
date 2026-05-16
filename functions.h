@@ -35,33 +35,26 @@ uint8_t read_byte(uint16_t address) {
 int save_byte(uint16_t address, uint16_t val){
     if (address >= 0x0000 && address <= 0x7FFF) {
         memory->rom[address] = val;
-        exit(EXIT_SUCCESS);
     } else if (address >= 0x8000 && address <= 0x9FFF) {
         memory->vram[address - 0x8000] = val;
-        exit(EXIT_SUCCESS);
     } else if (address >= 0xA000 && address <= 0xBFFF) {
         memory->external[address - 0xA000] = val;
-        exit(EXIT_SUCCESS);
     } else if (address >= 0xC000 && address <= 0xDFFF) {
         memory->wram[address - 0xC000] = val;
-        exit(EXIT_SUCCESS);
     } else if (address >= 0xE000 && address <= 0xFDFF) {
         memory->wram[address - 0xE000] = val;
-        exit(EXIT_SUCCESS);
     } else if (address >= 0xFE00 && address <= 0xFE9F) {
         memory->oam[address - 0xFE00] = val;
-        exit(EXIT_SUCCESS);
     } else if (address >= 0xFF00 && address <= 0xFF7F){
         memory->io[address - 0xFF4C] = val;
-        exit(EXIT_SUCCESS);
     } else if (address >= 0xFF80 && address <= 0xFFFE){
         memory->hram[address - 0xFF80] = val;
-        exit(EXIT_SUCCESS);
     } else if (address == 0xFFFF){
         memory->ie = val;
-        exit(EXIT_SUCCESS);
+    } else {
+        exit(EXIT_FAILURE);
     }
-    exit(EXIT_FAILURE);
+    return 0;
 }
 
 void prefix_function();
@@ -898,6 +891,7 @@ void JP() {
     uint8_t low = read_byte(reg->pc++);
     uint8_t high = read_byte(reg->pc++);
     uint16_t address = (high << 8) | low;
+    reg->pc = address;
 }
 
  // jp to address in hl
