@@ -1,61 +1,12 @@
 #ifndef FUNCTIONS_H
 #include "structs.h"
 #include <stdio.h>
-#include <stdlib.h>
 #include <stdbool.h>
 #define FUNCTIONS_H
 
 extern GameBoyMemory *memory;
 extern registers *reg;
 extern uint8_t opcode;
-
-uint8_t read_byte(uint16_t address) {
-    if (address >= 0x0000 && address <= 0x7FFF) {
-        return memory->rom[address];
-    } else if (address >= 0x8000 && address <= 0x9FFF) {
-        return memory->vram[address - 0x8000];
-    } else if (address >= 0xA000 && address <= 0xBFFF) {
-        return memory->external[address - 0xA000];
-    } else if (address >= 0xC000 && address <= 0xDFFF) {
-        return memory->wram[address - 0xC000];
-    } else if (address >= 0xE000 && address <= 0xFDFF) {
-        return memory->wram[address - 0xE000];
-    } else if (address >= 0xFE00 && address <= 0xFE9F) {
-        return memory->oam[address - 0xFE00];
-    } else if (address >= 0xFF00 && address <= 0xFF7F){
-        return memory->io[address - 0xFF4C];
-    } else if (address >= 0xFF80 && address <= 0xFFFE){
-        return memory->hram[address - 0xFF80];
-    } else if (address == 0xFFFF){
-        return memory->ie;
-    }
-    return 0xFF;
-}
-
-int save_byte(uint16_t address, uint16_t val){
-    if (address >= 0x0000 && address <= 0x7FFF) {
-        memory->rom[address] = val;
-    } else if (address >= 0x8000 && address <= 0x9FFF) {
-        memory->vram[address - 0x8000] = val;
-    } else if (address >= 0xA000 && address <= 0xBFFF) {
-        memory->external[address - 0xA000] = val;
-    } else if (address >= 0xC000 && address <= 0xDFFF) {
-        memory->wram[address - 0xC000] = val;
-    } else if (address >= 0xE000 && address <= 0xFDFF) {
-        memory->wram[address - 0xE000] = val;
-    } else if (address >= 0xFE00 && address <= 0xFE9F) {
-        memory->oam[address - 0xFE00] = val;
-    } else if (address >= 0xFF00 && address <= 0xFF7F){
-        memory->io[address - 0xFF4C] = val;
-    } else if (address >= 0xFF80 && address <= 0xFFFE){
-        memory->hram[address - 0xFF80] = val;
-    } else if (address == 0xFFFF){
-        memory->ie = val;
-    } else {
-        exit(EXIT_FAILURE);
-    }
-    return 0;
-}
 
 void prefix_function();
 

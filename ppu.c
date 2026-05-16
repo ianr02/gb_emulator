@@ -80,11 +80,10 @@ int main() {
 
     int running = 1;
     while (running) {
-        // Handle window events so it doesn't look frozen to Fedora
         while (XPending(display)) {
             XEvent event;
             XNextEvent(display, &event);
-            if (event.type == ClientMessage || event.type == KeyPress) {
+            if (event.type == ClientMessage) {
                 running = 0;
             }
         }
