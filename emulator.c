@@ -1,4 +1,4 @@
-#include "functions.h"
+#include "instructions.h"
 #include <stdbool.h>
 
 GameBoyMemory *memory;
