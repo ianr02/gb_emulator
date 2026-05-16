@@ -25,23 +25,15 @@ int main(int argc, char *argv[]) {
 
     bool go = true;
     while(go){
-        opcode = read_byte(reg->pc);
+        opcode = read_byte(reg->pc++);
 
         printf("PC: 0x%04X | Opcode: 0x%02X\n", reg->pc, opcode);
 
-        reg->pc++;
-
-        if (opcode == 0xCB) {
-            uint8_t cb_opcode = read_byte(reg->pc);
-            reg->pc++;
-            prefix_opcode_table[cb_opcode](); 
+        if (opcode_table[opcode] != NULL) {
+            opcode_table[opcode]();
         } else {
-            if (opcode_table[opcode] != NULL) {
-                opcode_table[opcode]();
-            } else {
-                printf("Error: Unimplemented Opcode 0x%02X at 0x%04X\n", opcode, reg->pc - 1);
-                exit(EXIT_FAILURE);
-            }
+            printf("Error: Unimplemented Opcode 0x%02X at 0x%04X\n", opcode, reg->pc - 1);
+            exit(EXIT_FAILURE);
         }
     }
     fclose(file);
