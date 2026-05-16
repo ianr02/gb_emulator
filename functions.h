@@ -64,10 +64,7 @@ int save_byte(uint16_t address, uint16_t val){
     exit(EXIT_FAILURE);
 }
 
-void prefix_function() {
-    opcode = read_byte(reg->pc++);
-    prefix_opcode_table[opcode]();
-}
+void prefix_function();
 
 // load inmediate value into register
 #define GEN_LD_N(reg_name) \
@@ -1999,5 +1996,10 @@ instruction_ptr prefix_opcode_table[256] = {
     [0xFE] = SET_hl, // SET 7, (HL)
     [0xFF] = SET_a,  // SET 7, A
 };
+
+void prefix_function() {
+    opcode = read_byte(reg->pc++);
+    prefix_opcode_table[opcode]();
+}
 
 #endif
