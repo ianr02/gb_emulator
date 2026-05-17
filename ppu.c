@@ -1,4 +1,3 @@
-
 #include "structs.h"
 
 #include <stdio.h>
@@ -8,21 +7,7 @@
 #define GB_HEIGHT 144
 #define SCALE     5
 
-#if defined(__linux__)
-    #include <X11/Xlib.h>
-    #include <X11/Xutil.h>
-#elif defined(__APPLE__) && defined(__MACH__)
-    #include <TargetConditionals.h>
-    #if TARGET_OS_OSX
-    #endif
-#endif
-
-Display *display;
-Window window;
-GC gc;
-XImage *x_image;
-
-extern 
+extern GameBoyMemory *memory;
 
 uint32_t framebuffer[GB_WIDTH * GB_HEIGHT]; 
 uint32_t *scaled_buffer; 
@@ -50,7 +35,7 @@ uint8_t read_byte(uint16_t address) {
     return 0xFF;
 }
 
-int save_byte(uint16_t address, uint16_t val){
+int save_byte(uint16_t address, uint8_t val){
     if (address >= 0x0000 && address <= 0x7FFF) {
         memory->rom[address] = val;
     } else if (address >= 0x8000 && address <= 0x9FFF) {
@@ -75,8 +60,16 @@ int save_byte(uint16_t address, uint16_t val){
     return 0;
 }
 
+#if defined(__linux__)
+    #include <X11/Xlib.h>
+    #include <X11/Xutil.h>
 
-void init_window() {
+    Display *display;
+    Window window;
+    GC gc;
+    XImage *x_image;
+
+    void init_window() {
     display = XOpenDisplay(NULL);
     if (!display) {
         fprintf(stderr, "Error: Cannot open X display. Is your desktop environment running?\n");
@@ -90,7 +83,7 @@ void init_window() {
     window = XCreateSimpleWindow(
         display, RootWindow(display, screen), 
         10, 10, GB_WIDTH * SCALE, GB_HEIGHT * SCALE, 
-        1, BlackPixel(display, window), 0x26FF99
+        1, BlackPixel(display, screen), 0x26FF99
     );
 
     XStoreName(display, window, "X11 GameBoy Emulator");
@@ -104,59 +97,66 @@ void init_window() {
         (char *)scaled_buffer, GB_WIDTH * SCALE, GB_HEIGHT * SCALE, 
         32, 0
     );
-}
+    }
 
-void render_frame() {
-    for (int y = 0; y < GB_HEIGHT; y++) {
-        for (int x = 0; x < GB_WIDTH; x++) {
-            uint32_t color = framebuffer[y * GB_WIDTH + x];
-            
-            for (int sy = 0; sy < SCALE; sy++) {
-                for (int sx = 0; sx < SCALE; sx++) {
-                    int dest_x = (x * SCALE) + sx;
-                    int dest_y = (y * SCALE) + sy;
-                    scaled_buffer[dest_y * (GB_WIDTH * SCALE) + dest_x] = color;
+    void render_frame() {
+        for (int y = 0; y < GB_HEIGHT; y++) {
+            for (int x = 0; x < GB_WIDTH; x++) {
+                uint32_t color = framebuffer[y * GB_WIDTH + x];
+                
+                for (int sy = 0; sy < SCALE; sy++) {
+                    for (int sx = 0; sx < SCALE; sx++) {
+                        int dest_x = (x * SCALE) + sx;
+                        int dest_y = (y * SCALE) + sy;
+                        scaled_buffer[dest_y * (GB_WIDTH * SCALE) + dest_x] = color;
+                    }
                 }
             }
         }
+
+        // 2. Blit the image to the window
+        XPutImage(display, window, gc, x_image, 0, 0, 0, 0, GB_WIDTH * SCALE, GB_HEIGHT * SCALE);
+        XFlush(display); 
     }
 
-    // 2. Blit the image to the window
-    XPutImage(display, window, gc, x_image, 0, 0, 0, 0, GB_WIDTH * SCALE, GB_HEIGHT * SCALE);
-    XFlush(display); 
-}
+    void close_window() {
+        XDestroyImage(x_image); 
+        XFreeGC(display, gc);
+        XDestroyWindow(display, window);
+        XCloseDisplay(display);
+    }
 
-void close_window() {
-    XDestroyImage(x_image); 
-    XFreeGC(display, gc);
-    XDestroyWindow(display, window);
-    XCloseDisplay(display);
-}
+    int main() {
+        init_window();
+        printf("Window initialized successfully via XWayland!\n");
 
-int main() {
-    init_window();
-    printf("Window initialized successfully via XWayland!\n");
-
-    int running = 1;
-    while (running) {
-        while (XPending(display)) {
-            XEvent event;
-            XNextEvent(display, &event);
-            if (event.type == ClientMessage) {
-                running = 0;
+        int running = 1;
+        while (running) {
+            while (XPending(display)) {
+                XEvent event;
+                XNextEvent(display, &event);
+                if (event.type == ClientMessage) {
+                    running = 0;
+                }
             }
+
+            for (int i = 0; i < GB_WIDTH * GB_HEIGHT; i++) {
+                uint8_t noise = rand() % 256;
+                framebuffer[i] = (noise << 16) | (noise << 8) | noise; 
+            }
+
+            render_frame();
+            usleep(16666); 
         }
 
-        for (int i = 0; i < GB_WIDTH * GB_HEIGHT; i++) {
-            uint8_t noise = rand() % 256;
-            framebuffer[i] = (noise << 16) | (noise << 8) | noise; 
-        }
-
-        render_frame();
-        usleep(16666); 
+        close_window();
+        printf("Window closed cleanly.\n");
+        return 0;
     }
+#elif defined(__APPLE__) && defined(__MACH__)
+    #include <TargetConditionals.h>
+    #if TARGET_OS_OSX
+    #endif
+#endif
 
-    close_window();
-    printf("Window closed cleanly.\n");
-    return 0;
-}
+free(scaled_buffer);

@@ -33,7 +33,7 @@ uint8_t read_byte(uint16_t address) {
     return 0xFF;
 }
 
-int save_byte(uint16_t address, uint16_t val){
+int save_byte(uint16_t address, uint8_t val){
     if (address >= 0x0000 && address <= 0x7FFF) {
         memory->rom[address] = val;
     } else if (address >= 0x8000 && address <= 0x9FFF) {
@@ -402,19 +402,23 @@ void NOP(){
 
 // Put value A into [nn]
 void SV_nn_a() {
-    uint16_t address = read_byte(reg->pc++) | (read_byte(reg->pc++) << 8);
+    uint8_t low = read_byte(reg->pc++);
+    uint8_t high = read_byte(reg->pc++);
+    uint16_t address = low | (high << 8);
     save_byte(address, reg->a);
 }
 
 // Save value from A into memory in [0xFF00 + n], where n is an 8 bit immediate value
 void SVH_imm_a(){
-    uint8_t address = 0xFF00 | read_byte(reg->pc++);
+    uint16_t address = 0xFF00 | read_byte(reg->pc++);
     save_byte(address, reg->a);
 }
 
 // Load value from memory in [0xFF00 + n], where n is an 8 bit immediate value, into A
 void LDH_imm_a(){
-    uint8_t address = 0xFF00 | read_byte(reg->pc++);
+    uint8_t low = read_byte(reg->pc++);
+    uint8_t high = read_byte(reg->pc++);
+    uint16_t address = low | (high << 8);
     reg->a = read_byte(address);
 }
 
@@ -432,8 +436,11 @@ void LDHL_sp_n(){
 
 // Save SP into [nn], being 16 bit immediate value
 void SV_nn_sp(){
-    uint16_t address = read_byte(reg->pc++) | (read_byte(reg->pc++) << 8);
-    save_byte(address, reg->sp);
+    uint8_t low = read_byte(reg->pc++);
+    uint8_t high = read_byte(reg->pc++);
+    uint16_t address = low | (high << 8);
+    save_byte(address, (uint8_t)(reg->sp & 0xFF));
+    save_byte(address+1, (uint8_t)(reg->sp >> 8));
 }
 
 // Put value at address HL into A. Decrement HL
