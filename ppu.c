@@ -114,7 +114,6 @@ int save_byte(uint16_t address, uint8_t val){
             }
         }
 
-        // 2. Blit the image to the window
         XPutImage(display, window, gc, x_image, 0, 0, 0, 0, GB_WIDTH * SCALE, GB_HEIGHT * SCALE);
         XFlush(display); 
     }

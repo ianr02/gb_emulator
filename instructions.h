@@ -130,8 +130,8 @@ void LD_##reg_name##_nn() { \
 // Push register onto the stack, decrementing SP by 2
 #define PUSH_REG16(reg_name) \
 void PUSH_##reg_name() { \
-    save_byte(--reg->sp, (reg->reg_name >> 8) & 0xFF); \
-    save_byte(--reg->sp, reg->reg_name & 0xFF); \
+    save_byte(--reg->sp, (uint8_t)(reg->reg_name >> 8)); \
+    save_byte(--reg->sp, (uint8_t)(reg->reg_name & 0xFF)); \
 }
 
 // Pop register off the stack, incrementing SP by 2
@@ -1047,7 +1047,9 @@ void RST() {
 
 // Pop two bytes from stack & jump to that address
 void RET() {
-    uint16_t address = read_byte(reg->sp++) | (read_byte(reg->sp++) << 8);
+    uint8_t low = read_byte(reg->pc++);
+    uint8_t high = read_byte(reg->pc++);
+    uint16_t address = (high<<8) | low;
     reg->pc = address;
 }
 
@@ -1082,7 +1084,9 @@ void RET_COND() {
 
 // Pop two bytes from stack & jump to that address then enable interrupts
 void RETI() {
-    uint16_t address = read_byte(reg->sp++) | (read_byte(reg->sp++) << 8);
+    uint8_t low = read_byte(reg->sp++);
+    uint8_t high = read_byte(reg->sp++);
+    uint16_t address = (high<<8) | low;
     reg->pc = address;
 }
 
