@@ -751,14 +751,14 @@ void CPL() {
 
 // Complement carry flag
 void CCF() {
-    reg->f ^= 0x10;
-    reg->f &= 0x50;
+    reg->f ^= 0x10;   
+    reg->f &= ~0x60;  
 }
 
 // Set Carry flag
 void SCF() {
-    reg->f &= 0x80;
-    reg->f |= 0x10;
+    reg->f &= ~0x60;  
+    reg->f |= 0x10; 
 }
 
 // Halt CPU

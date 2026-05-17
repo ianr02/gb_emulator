@@ -153,10 +153,8 @@ int save_byte(uint16_t address, uint8_t val){
         printf("Window closed cleanly.\n");
         return 0;
     }
-#elif defined(__APPLE__) && defined(__MACH__)
+#elif defined(__APPLE__) && defined(__MACH__) && TARGET_OS_OSX
     #include <TargetConditionals.h>
-    #if TARGET_OS_OSX
-    #endif
 #endif
 
 free(scaled_buffer);
