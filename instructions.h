@@ -58,6 +58,53 @@ int save_byte(uint16_t address, uint8_t val){
     return 0;
 }
 
+void init_io_ports(void) {
+    // Timer Defaults
+    save_byte(_TIMA, 0x0);
+    save_byte(_TMA, 0x0);
+    save_byte(_TAC, 0x0);
+
+    // Audio Defaults (Channel 1)
+    save_byte(_NR10, 0x80);
+    save_byte(_NR11, 0xBF);
+    save_byte(_NR12, 0xF3);
+    save_byte(_NR14, 0xBF);
+    
+    // Audio Defaults (Channel 2)
+    save_byte(_NR21, 0x3F);
+    save_byte(_NR22, 0x0);
+    save_byte(_NR24, 0xBF);
+
+    // Audio Defaults (Channel 3)
+    save_byte(_NR30, 0x7F);
+    save_byte(_NR31, 0xFF);
+    save_byte(_NR32, 0x9F);
+    save_byte(_NR33, 0xBF);
+
+    // Audio Channel 4 & Master Controls
+    save_byte(_NR41, 0xFF);
+    save_byte(_NR42, 0x00);
+    save_byte(_NR43, 0x00);
+    save_byte(_NR44, 0xBF);
+    save_byte(_NR50, 0x77);
+    save_byte(_NR51, 0xF3);
+    save_byte(_NR52, 0xF1); 
+
+    // Video / PPU
+    save_byte(_LCDC, 0x91);
+    save_byte(_SCY,  0x00);
+    save_byte(_SCX,  0x00);
+    save_byte(_LYC,  0x00);
+    save_byte(_BGP,  0xFC);
+    save_byte(_OBP0, 0xFF);
+    save_byte(_OBP1, 0xFF);
+    save_byte(_WY,   0x00);
+    save_byte(_WX,   0x00);
+
+    // Interrupt Enable
+    save_byte(_IE,   0x00);
+}
+
 // load inmediate value into register
 #define GEN_LD_N(reg_name) \
 void LD_##reg_name##_n() { \
@@ -1041,7 +1088,8 @@ void RST() {
             offset = 0x38;
             break;
     }
-    save_byte(--reg->sp, reg->pc);
+    save_byte(--reg->sp, (reg->pc >> 8) & 0xFF);
+    save_byte(--reg->sp, reg->pc & 0xFF);
     reg->pc = 0x0000 + offset;
 }
 

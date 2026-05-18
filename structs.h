@@ -6,6 +6,54 @@
 #define GAMEBOY_MEMORY_SIZE (1 << 16) // 64KB
 #define INIT_PC 0x0100
 
+// Timer Registers
+#define _TIMA 0xFF05
+#define _TMA  0xFF06
+#define _TAC  0xFF07
+
+// Audio Registers (Sound Channel 1)
+#define _NR10 0xFF10
+#define _NR11 0xFF11
+#define _NR12 0xFF12
+#define _NR14 0xFF14
+
+// Audio Registers (Sound Channel 2)
+#define _NR21 0xFF16
+#define _NR22 0xFF17
+#define _NR24 0xFF19
+
+// Audio Registers (Sound Channel 3)
+#define _NR30 0xFF1A
+#define _NR31 0xFF1B
+#define _NR32 0xFF1C
+#define _NR33 0xFF1E
+
+// Audio Registers (Sound Channel 4)
+#define _NR41 0xFF20
+#define _NR42 0xFF21
+#define _NR43 0xFF22
+#define _NR44 0xFF23 // Note: $FF23 is actually NR44 on real hardware
+
+// Audio Control Registers
+#define _NR50 0xFF24
+#define _NR51 0xFF25
+#define _NR52 0xFF26
+
+// Video/PPU Registers
+#define _LCDC 0xFF40
+#define _SCY  0xFF42
+#define _SCX  0xFF43
+#define _LYC  0xFF45
+#define _BGP  0xFF47
+#define _OBP0 0xFF48
+#define _OBP1 0xFF49
+#define _WY   0xFF4A
+#define _WX   0xFF4B
+
+// Interrupt Enable Register
+#define _IE   0xFFFF
+
+
 typedef void (*instruction_ptr)(void);
 typedef struct {
     uint8_t rom[0x8000];    // 32KB Cartridge (Bank 0 and 1)
@@ -59,5 +107,7 @@ typedef struct {
     uint16_t pc;
 } registers;
 
+GameBoyMemory *memory;
+registers *reg;
 
 #endif

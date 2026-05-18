@@ -1,18 +1,24 @@
 #include "instructions.h"
 #include <stdbool.h>
 
-GameBoyMemory *memory;
-registers *reg;
+extern GameBoyMemory *memory;
+extern registers *reg;
 uint8_t opcode;
 
 int main(int argc, char *argv[]) {
-    memory = malloc(GAMEBOY_MEMORY_SIZE);
-    reg = malloc(11 * sizeof(registers));
-    reg->pc = INIT_PC;
     if(argc < 2) {
         printf("Usage: %s <path_to_rom>\n", argv[0]);
         return 1;
     }
+    memory = malloc(GAMEBOY_MEMORY_SIZE);
+    reg = malloc(sizeof(registers));
+    init_io_ports();
+    reg->pc = INIT_PC;
+    reg->af = 0x01B0;
+    reg->bc = 0x0013;
+    reg->de = 0x00D8;
+    reg->hl = 0x014D;
+    reg->sp = 0xFFFE; 
 
     FILE *file = fopen(argv[1], "rb");
     if (!file) {
