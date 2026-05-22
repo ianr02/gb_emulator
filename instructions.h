@@ -105,54 +105,51 @@ void init_io_ports(void) {
     save_byte(_IE,   0x00);
 }
 
+void update_timers(uint8_t cycle);
+
 // load inmediate value into register
 #define GEN_LD_N(reg_name) \
 void LD_##reg_name##_n() { \
     reg->reg_name = read_byte(reg->pc++); \
+    update_timers(8); \
 } 
+
+// load value from [hl] into reg_name
+#define GEN_LD_n_hl(reg_name) \
+void LD_##reg_name##_hl() { \
+    reg->reg_name = read_byte(reg->hl); \
+    update_timers(8); \
+}
 
 // copy value from r2 to r1
 #define GEN_LD_R1_R2(r1, r2) \
 void LD_##r1##_##r2() { \
     reg->r1 = reg->r2; \
+    update_timers(4); \
 }
 
-// load value from memory in bc into register
-#define GEN_REG_BC(reg_name) \
-void LD_##reg_name##_bc() { \
-    reg->reg_name = read_byte(reg->bc); \
-}
-
-// load value from memory in de into register
-#define GEN_REG_DE(reg_name) \
-void LD_##reg_name##_de() { \
-    reg->reg_name = read_byte(reg->de); \
-}
-
-// load value from memory in hl into register
-#define GEN_REG_HL(reg_name) \
-void LD_##reg_name##_hl() { \
-    reg->reg_name = read_byte(reg->hl); \
+// load value from memory in reg_name into register a
+#define GEN_REG_n(reg_name) \
+void LD_a_##reg_name() { \
+    reg->a = read_byte(reg->reg_name); \
+    update_timers(12); \
 }
 
 // load value from memory in [nn], 16 bit value, into register
 #define GEN_REG_NN(reg_name) \
 void LD_##reg_name##_nn() { \
-    uint16_t address = read_byte(reg->pc++) | (read_byte(reg->pc++) << 8); \
+    uint8_t low = read_byte(reg->pc ++); \
+    uint8_t high = read_byte(reg->pc ++); \
+    uint16_t address = (high << 8) | low; \
     reg->reg_name = read_byte(address); \
+    update_timers(16); \
 }
 
 // save value from register into memory in [register]
 #define GEN_LD_ADDR_R(reg_addr, reg_name) \
 void SV_##reg_addr##_##reg_name() { \
     save_byte(reg->reg_addr, reg->reg_name); \
-}
-
-// save inmediate value into memory in [register]
-#define GEN_LD_ADDR_IMM(reg_addr) \
-void SV_##reg_addr##_n() { \
-    uint8_t val = read_byte(reg->pc++); \
-    save_byte(reg->reg_addr, val); \
+    update_timers(8); \
 }
 
 // load form value in reg2 + 0xFF00 ($FF00) into reg1
@@ -445,6 +442,19 @@ void RESET_##reg_name() { \
 
 void NOP(){
     
+}
+
+// Put HL into Stack Pointer (SP)
+void LD_sp_hl() {
+    reg->sp = reg->hl;
+    update_timers(8);
+}
+
+// save n8 in [hl]
+void SV_hl_n() { \
+    uint8_t val = read_byte(reg->pc++); \
+    save_byte(reg->hl, val); \
+    update_timers(12); \
 }
 
 // Put value A into [nn]
@@ -1332,37 +1342,10 @@ POP_REG16(bc);
 POP_REG16(de);
 POP_REG16(hl);
 
-GEN_REG_BC(a);
-GEN_REG_BC(b);
-GEN_REG_BC(c);
-GEN_REG_BC(d);
-GEN_REG_BC(e);
-GEN_REG_BC(h);
-GEN_REG_BC(l);
-
-GEN_REG_DE(a);
-GEN_REG_DE(b);
-GEN_REG_DE(c);
-GEN_REG_DE(d);
-GEN_REG_DE(e);
-GEN_REG_DE(h);
-GEN_REG_DE(l);
-
-GEN_REG_HL(a);
-GEN_REG_HL(b);
-GEN_REG_HL(c);
-GEN_REG_HL(d);
-GEN_REG_HL(e);
-GEN_REG_HL(h);
-GEN_REG_HL(l);
+GEN_REG_n(bc);
+GEN_REG_n(de);
 
 GEN_REG_NN(a);
-GEN_REG_NN(b);
-GEN_REG_NN(c);
-GEN_REG_NN(d);
-GEN_REG_NN(e);
-GEN_REG_NN(h);
-GEN_REG_NN(l);
 
 GEN_LD_REG_REG(a, c);
 GEN_SV_REG_REG(c, a);
@@ -1389,15 +1372,6 @@ GEN_LD_ADDR_R(de, e);
 GEN_LD_ADDR_R(de, h);
 GEN_LD_ADDR_R(de, l);
 
-GEN_LD_ADDR_IMM(hl);
-GEN_LD_ADDR_IMM(bc);
-GEN_LD_ADDR_IMM(de);
-GEN_LD_ADDR_IMM(b);
-GEN_LD_ADDR_IMM(c); 
-GEN_LD_ADDR_IMM(d);
-GEN_LD_ADDR_IMM(e);
-GEN_LD_ADDR_IMM(h);
-GEN_LD_ADDR_IMM(l);
 GEN_LD_IMM_REG16(bc);
 GEN_LD_IMM_REG16(de);
 GEN_LD_IMM_REG16(hl);
@@ -1460,14 +1434,22 @@ GEN_LD_R1_R2(l, d);
 GEN_LD_R1_R2(l, e);
 GEN_LD_R1_R2(l, h);
 GEN_LD_R1_R2(l, l);
-GEN_LD_R1_R2(hl, a);
-GEN_LD_R1_R2(hl, b);
-GEN_LD_R1_R2(hl, c);
-GEN_LD_R1_R2(hl, d);
-GEN_LD_R1_R2(hl, e);
-GEN_LD_R1_R2(hl, h);
-GEN_LD_R1_R2(hl, l);
-GEN_LD_R1_R2(sp, hl);
+
+GEN_SV_n_hl(a);
+GEN_SV_n_hl(b);
+GEN_SV_n_hl(c);
+GEN_SV_n_hl(d);
+GEN_SV_n_hl(e);
+GEN_SV_n_hl(h);
+GEN_SV_n_hl(l);
+
+GEN_LD_n_hl(a);
+GEN_LD_n_hl(b);
+GEN_LD_n_hl(c);
+GEN_LD_n_hl(d);
+GEN_LD_n_hl(e);
+GEN_LD_n_hl(h);
+GEN_LD_n_hl(l);
 
 instruction_ptr opcode_table[256] = {
     // 0x0_

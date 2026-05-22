@@ -110,4 +110,6 @@ typedef struct {
 GameBoyMemory *memory;
 registers *reg;
 
+uint16_t internalClock = 0;
+
 #endif
