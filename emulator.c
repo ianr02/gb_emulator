@@ -30,13 +30,6 @@ int main(int argc, char *argv[]) {
 
     bool go = true;
     while(go){
-         if (ime_next >= 0) {
-            ime_next--;
-            if (ime_next == 0) {
-                ime = ei;            
-                ime_next = -1; // Reset tracker
-            }
-        }
         if (ime) {
             // check_and_handle_interrupts();
         }
@@ -48,6 +41,13 @@ int main(int argc, char *argv[]) {
         } else {
             printf("Error: Unimplemented Opcode 0x%02X at 0x%04X\n", opcode, reg->pc - 1);
             exit(EXIT_FAILURE);
+        }
+        if (ime_next >= 0) {
+            ime_next--;
+            if (ime_next == 0) {
+                ime = ei;            
+                ime_next = -1; // Reset tracker
+            }
         }
     }
     fclose(file);

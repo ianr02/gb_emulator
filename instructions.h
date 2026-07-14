@@ -23,7 +23,7 @@ uint8_t read_byte(uint16_t address) {
     } else if (address >= 0xFE00 && address <= 0xFE9F) {
         return memory->oam[address - 0xFE00];
     } else if (address >= 0xFF00 && address <= 0xFF7F){
-        return memory->io[address - 0xFF4C];
+        return memory->io[address - 0xFF00];
     } else if (address >= 0xFF80 && address <= 0xFFFE){
         return memory->hram[address - 0xFF80];
     } else if (address == 0xFFFF){
@@ -404,7 +404,7 @@ void RLC_##reg_name() { \
     uint8_t carry = (reg->reg_name & 0x80) >> 7; \
     reg->reg_name = (reg->reg_name << 1) | carry; \
     reg->f |= (carry << 4); \
-    if(reg->reg_name == 0) \
+    if (prefix_flag && reg->reg_name == 0) \
         reg->f |= 0x80; \
     if (prefix_flag) update_timers(8); \
     else update_timers(4); \
@@ -416,7 +416,7 @@ void RL_##reg_name() { \
     uint8_t old = (reg->f & 0x10) >> 4; \
     reg->reg_name = (reg->reg_name << 1) | old; \
     reg->f = (new << 4); \
-    if(reg->reg_name == 0) \
+    if (prefix_flag && reg->reg_name == 0) \
         reg->f |= 0x80; \
     if (prefix_flag) update_timers(8); \
     else update_timers(4); \
@@ -428,7 +428,7 @@ void RRC_##reg_name() { \
     uint8_t carry = (reg->reg_name & 0x01); \
     reg->reg_name = (carry << 7) | (reg->reg_name >> 1); \
     reg->f |= (carry << 4); \
-    if(reg->reg_name == 0) \
+    if (prefix_flag && reg->reg_name == 0) \
         reg->f |= 0x80; \
     if (prefix_flag) update_timers(8); \
     else update_timers(4); \
@@ -440,7 +440,7 @@ void RR_##reg_name() { \
     uint8_t old = (reg->f & 0x10) << 3; \
     reg->reg_name = old | (reg->reg_name >> 1); \
     reg->f = (new << 4); \
-    if(reg->reg_name == 0) \
+    if (prefix_flag && reg->reg_name == 0) \
         reg->f |= 0x80; \
     if (prefix_flag) update_timers(8); \
     else update_timers(4); \
@@ -556,8 +556,8 @@ void LDHL_sp_n(){
         reg->f |= 0x20; // half-carry for bits 3,4
     if (((reg->sp & 0xFF) + (uint8_t)n) > (0xFF))
         reg->f |= 0x10; // carry for bits 6,7
-    
     reg->hl = reg->sp + n;
+    update_timers(12);
 }
 
 // Save SP into [nn], being 16 bit immediate value
@@ -960,7 +960,7 @@ void RCL_hl() {
     val = (val << 1) | carry;
     save_byte(reg->hl, val);
     reg->f |= (carry << 4);
-    if(reg->a == 0)
+    if(val == 0)
         reg->f |= 0x80;
     update_timers(16);
 }
@@ -1194,7 +1194,7 @@ void CALL_COND() {
         break;
     case 0xD4:
         if(!(reg->f & 0x10)) {
-            condition_met == true;
+            condition_met = true;
         }
         break;
     case 0xDC:
@@ -1897,7 +1897,7 @@ instruction_ptr prefix_opcode_table[256] = {
     [0x0C] = RRC_h, // RRC H
     [0x0D] = RRC_l, // RRC L
     [0x0E] = RRC_hl, // RRC (HL)
-    [0x0F] = RR_a, // RRC A
+    [0x0F] = RRC_a, // RRC A
 
     // 0x1_ (Rotates & Shifts through Carry)
     [0x10] = RL_b, // RL B
