@@ -1,5 +1,4 @@
 #include "instructions.h"
-#include <stdbool.h>
 
 extern GameBoyMemory *memory;
 extern registers *reg;
@@ -31,6 +30,16 @@ int main(int argc, char *argv[]) {
 
     bool go = true;
     while(go){
+         if (ime_next >= 0) {
+            ime_next--;
+            if (ime_next == 0) {
+                ime = ei;            
+                ime_next = -1; // Reset tracker
+            }
+        }
+        if (ime) {
+            // check_and_handle_interrupts();
+        }
         opcode = read_byte(reg->pc);
         printf("PC: 0x%04X | Opcode: 0x%02X\n", reg->pc, opcode);
         ++reg->pc;

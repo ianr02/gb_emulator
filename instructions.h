@@ -1,7 +1,6 @@
 #ifndef FUNCTIONS_H
 #include "structs.h"
 #include <stdio.h>
-#include <stdbool.h>
 #define FUNCTIONS_H
 
 extern GameBoyMemory *memory;
@@ -47,7 +46,8 @@ int save_byte(uint16_t address, uint8_t val){
     } else if (address >= 0xFE00 && address <= 0xFE9F) {
         memory->oam[address - 0xFE00] = val;
     } else if (address >= 0xFF00 && address <= 0xFF7F){
-        memory->io[address - 0xFF4C] = val;
+        if (address == _DIV) internalClock = 0;
+        else memory->io[address - 0xFF00] = val;
     } else if (address >= 0xFF80 && address <= 0xFFFE){
         memory->hram[address - 0xFF80] = val;
     } else if (address == 0xFFFF){
@@ -102,37 +102,65 @@ void init_io_ports(void) {
     save_byte(_WX,   0x00);
 
     // Interrupt Enable
+    save_byte(_IF,   0x00);
     save_byte(_IE,   0x00);
 }
 
-void update_timers(uint8_t cycle);
+void update_timers(uint8_t cycles) {
+    uint8_t tac = read_byte(_TAC);
+    
+    for (int i = 0; i < cycles; i++) {
+        uint16_t oldClock = internalClock;
+        internalClock++;
+        
+        // Only check for overflow if timer is enabled
+        if (tac & 0x04) {
+            uint8_t bitPos[] = {9, 3, 5, 7}; 
+            uint8_t bit = bitPos[tac & 0x03];
+            
+            int oldBit = (oldClock >> bit) & 1;
+            int newBit = (internalClock >> bit) & 1;
+            
+            if (oldBit == 1 && newBit == 0) {
+                uint8_t tima = read_byte(_TIMA) + 1;
+                if (tima == 0) {
+                    tima = read_byte(_TMA);
+                    uint8_t if_reg = read_byte(_IF);
+                    save_byte(_IF, if_reg | 0x04);
+                }
+                save_byte(_TIMA, tima);
+            }
+        }
+    }
+    memory->io[_DIV - 0xff00] = (internalClock >> 8) & 0xFF;
+}
 
-// load inmediate value into register
+// load inmediate value into register (checked)
 #define GEN_LD_N(reg_name) \
 void LD_##reg_name##_n() { \
     reg->reg_name = read_byte(reg->pc++); \
     update_timers(8); \
 } 
 
-// load value from [hl] into reg_name
+// load value from [hl] into reg_name (checked)
 #define GEN_LD_n_hl(reg_name) \
 void LD_##reg_name##_hl() { \
     reg->reg_name = read_byte(reg->hl); \
     update_timers(8); \
 }
 
-// copy value from r2 to r1
+// copy value from r2 to r1 (checked)
 #define GEN_LD_R1_R2(r1, r2) \
 void LD_##r1##_##r2() { \
     reg->r1 = reg->r2; \
     update_timers(4); \
 }
 
-// load value from memory in reg_name into register a
+// load value from memory in [reg_name] into register A (checked)
 #define GEN_REG_n(reg_name) \
 void LD_a_##reg_name() { \
     reg->a = read_byte(reg->reg_name); \
-    update_timers(12); \
+    update_timers(8); \
 }
 
 // load value from memory in [nn], 16 bit value, into register
@@ -145,7 +173,7 @@ void LD_##reg_name##_nn() { \
     update_timers(16); \
 }
 
-// save value from register into memory in [register]
+// save value from register into memory in [register] (checked)
 #define GEN_LD_ADDR_R(reg_addr, reg_name) \
 void SV_##reg_addr##_##reg_name() { \
     save_byte(reg->reg_addr, reg->reg_name); \
@@ -156,19 +184,24 @@ void SV_##reg_addr##_##reg_name() { \
 #define GEN_LD_REG_REG(reg1, reg2) \
 void SLD_##reg1##_##reg2() { \
     reg->reg1 = 0xFF00 |reg->reg2; \
+    update_timers(8); \
 }
 
 // save form value in reg1 into [reg2 + 0xFF00 ($FF00)]
 #define GEN_SV_REG_REG(reg1, reg2) \
 void SLD_##reg1##_##reg2() { \
     save_byte(0xFF00 | reg->reg2, reg->reg1); \
+    update_timers(8);  \
 }
 
-// load inmediate 16 bit value into register of 16 bit
+// load inmediate 16 bit value into register of 16 bit (check)
 #define GEN_LD_IMM_REG16(reg_name) \
 void LD_##reg_name##_nn() { \
-    uint16_t value = read_byte(reg->pc++) | (read_byte(reg->pc++) << 8); \
+    uint8_t low = read_byte(reg->pc++); \
+    uint8_t high = read_byte(reg->pc++); \
+    uint16_t value = high << 8 | low; \
     reg->reg_name = value; \
+    update_timers(12); \
 }
 
 // Push register onto the stack, decrementing SP by 2
@@ -176,12 +209,16 @@ void LD_##reg_name##_nn() { \
 void PUSH_##reg_name() { \
     save_byte(--reg->sp, (uint8_t)(reg->reg_name >> 8)); \
     save_byte(--reg->sp, (uint8_t)(reg->reg_name & 0xFF)); \
+    update_timers(16); \
 }
 
 // Pop register off the stack, incrementing SP by 2
 #define POP_REG16(reg_name) \
 void POP_##reg_name() { \
-    reg->reg_name = read_byte(reg->sp++) | (read_byte(reg->sp++) << 8); \
+    uint8_t low = read_byte(reg->sp++); \
+    uint8_t high = read_byte(reg->sp++); \
+    reg->reg_name =  (high << 8) | low; \
+    update_timers(12); \
 }
 
 // ADD reg to register A
@@ -197,6 +234,7 @@ void ADD_A_##reg_name(){ \
     if (result > 0xFF) \
         reg->f |= 0x10; \
     reg->a = (uint8_t)result; \
+    update_timers(4); \
 }
 
 // ADD reg and carry bit to register A
@@ -213,6 +251,7 @@ void ADC_A_##reg_name(){ \
     if (result > 0xFF) \
         reg->f |= 0x10; \
     reg->a = (uint8_t)result; \
+    update_timers(4); \
 }
 
 // SUB reg to register A
@@ -228,13 +267,14 @@ void SUB_A_##reg_name(){ \
     if (result < 0) \
         reg->f |= 0x10; \
     reg->a = (uint8_t)result; \
+    update_timers(4); \
 }
 
 // SUB reg and carry bit to register A
 #define GEN_SBC_A_REG(reg_name) \
 void SBC_A_##reg_name(){ \
     uint8_t val = reg->reg_name; \
-    uint8_t carry = (reg->f & 0x40) ? 1 : 0; \
+    uint8_t carry = (reg->f & 0x10) ? 1 : 0; \
     int16_t result = (int16_t)reg->a - (int16_t)val - carry; \
     reg->f = 0x40; \
     if ((result & 0xFF) == 0) \
@@ -244,6 +284,7 @@ void SBC_A_##reg_name(){ \
     if (result < 0) \
         reg->f |= 0x10; \
     reg->a = (uint8_t)result; \
+    update_timers(4); \
 }
 
 // AND between register A and register
@@ -253,6 +294,7 @@ void AND_A_##reg_name() { \
     if ((reg->a & reg->reg_name) == 0) \
         reg->f |= 0x80; \
     reg->a &= reg->reg_name; \
+    update_timers(4); \
 }
 
 // OR between register A and register
@@ -262,6 +304,7 @@ void OR_A_##reg_name() { \
     if ((reg->a | reg->reg_name) == 0) \
         reg->f |= 0x80; \
     reg->a |= reg->reg_name; \
+    update_timers(4); \
 }
 
 // XOR between register A and register
@@ -271,6 +314,7 @@ void XOR_A_##reg_name() { \
     if ((reg->a ^ reg->reg_name)== 0) \
         reg->f |= 0x80; \
     reg->a ^= reg->reg_name; \
+    update_timers(4); \
 }
 
 // CMP between register A and register
@@ -288,6 +332,7 @@ void CP_A_##reg_name() { \
     if (result < 0) { \
         reg->f |= 0x10; \
     } \
+    update_timers(4); \
 }
 
 // INC register
@@ -301,6 +346,7 @@ void INC_##reg_name() { \
     if (reg->reg_name == 0) { \
         reg->f |= 0x80; \
     } \
+    update_timers(4); \
 }
 
 // DEC register
@@ -313,6 +359,7 @@ void DEC_##reg_name() { \
     --reg->reg_name; \
     if(reg->reg_name == 0) \
         reg->f |= 0x80; \
+    update_timers(4); \
 }
 
 // ADD register into hl register
@@ -324,18 +371,21 @@ void ADD_HL_##reg_name(){ \
     if((reg->hl & 0xFFF) + (reg->reg_name & 0xFFF) > 0xFFF) \
         reg->f |= 0x20; \
     reg->hl += reg->reg_name; \
+    update_timers(8); \
 }
 
 // increment register of 16 bits
 #define GEN_INC_REG16(reg_name) \
 void INC_##reg_name(){ \
     ++reg->reg_name; \
+    update_timers(8); \
 }
 
 // decrement register of 16 bits
 #define GEN_DEC_REG16(reg_name) \
 void DEC_##reg_name(){ \
     --reg->reg_name; \
+    update_timers(8); \
 }
 
 // swap bits 0-3 and 4-7
@@ -345,6 +395,7 @@ void SWAP_##reg_name() { \
     if (reg->reg_name == 0x0) \
         reg-> f = 0x80; \
     reg->reg_name = (reg->reg_name << 4) | (reg->reg_name >> 4); \
+    update_timers(8); \
 }
 
 #define GEN_RLC_n(reg_name) \
@@ -355,6 +406,8 @@ void RLC_##reg_name() { \
     reg->f |= (carry << 4); \
     if(reg->reg_name == 0) \
         reg->f |= 0x80; \
+    if (prefix_flag) update_timers(8); \
+    else update_timers(4); \
 }
 
 #define GEN_RL_n(reg_name) \
@@ -365,6 +418,8 @@ void RL_##reg_name() { \
     reg->f = (new << 4); \
     if(reg->reg_name == 0) \
         reg->f |= 0x80; \
+    if (prefix_flag) update_timers(8); \
+    else update_timers(4); \
 }
 
 #define GEN_RRC_n(reg_name) \
@@ -375,6 +430,8 @@ void RRC_##reg_name() { \
     reg->f |= (carry << 4); \
     if(reg->reg_name == 0) \
         reg->f |= 0x80; \
+    if (prefix_flag) update_timers(8); \
+    else update_timers(4); \
 }
 
 #define GEN_RR_n(reg_name) \
@@ -385,6 +442,8 @@ void RR_##reg_name() { \
     reg->f = (new << 4); \
     if(reg->reg_name == 0) \
         reg->f |= 0x80; \
+    if (prefix_flag) update_timers(8); \
+    else update_timers(4); \
 }
 
 #define GEN_SL_n(reg_name) \
@@ -394,6 +453,8 @@ void SL_##reg_name() { \
     reg->reg_name <<= 1; \
     if (reg->reg_name == 0) \
         reg->f |= 0x80; \
+    if (prefix_flag) update_timers(8); \
+    else update_timers(4); \
 }
 
 #define GEN_SRA_n(reg_name) \
@@ -404,6 +465,8 @@ void SRA_##reg_name() { \
     reg->f = (carry << 4); \
     if (reg->reg_name == 0x0) \
         reg->f |= 0x80; \
+    if (prefix_flag) update_timers(8); \
+    else update_timers(4); \
 }
 
 #define GEN_SRL_n(reg_name) \
@@ -413,6 +476,8 @@ void SRL_##reg_name() { \
     reg->f = (carry << 4); \
     if (reg->reg_name == 0x0) \
         reg->f |= 0x80; \
+    if (prefix_flag) update_timers(8); \
+    else update_timers(4); \
 }
 
 #define GEN_BIT_n(reg_name) \
@@ -423,6 +488,7 @@ void BIT_##reg_name() { \
     reg->f |= 0x20; \
     if (!(reg->reg_name & mask)) \
         reg->f |= 0x80; \
+    update_timers(8); \
 }
 
 #define GEN_SET_n(reg_name) \
@@ -430,6 +496,7 @@ void SET_##reg_name() { \
     uint8_t bit = (opcode >> 3) & 0x07; \
     uint8_t mask = 1 << bit; \
     reg->reg_name |= mask; \
+    update_timers(8); \
 }
 
 #define GEN_RESET_n(reg_name) \
@@ -437,11 +504,12 @@ void RESET_##reg_name() { \
     uint8_t bit = (opcode >> 3) & 0x07; \
     uint8_t mask = ~(1 << bit); \
     reg->reg_name &= mask;\
+    update_timers(8); \
 }
 
 
 void NOP(){
-    
+    update_timers(4);
 }
 
 // Put HL into Stack Pointer (SP)
@@ -450,7 +518,7 @@ void LD_sp_hl() {
     update_timers(8);
 }
 
-// save n8 in [hl]
+// save n8 in [hl] (checked)
 void SV_hl_n() { \
     uint8_t val = read_byte(reg->pc++); \
     save_byte(reg->hl, val); \
@@ -463,20 +531,21 @@ void SV_nn_a() {
     uint8_t high = read_byte(reg->pc++);
     uint16_t address = low | (high << 8);
     save_byte(address, reg->a);
+    update_timers(16);
 }
 
 // Save value from A into memory in [0xFF00 + n], where n is an 8 bit immediate value
 void SVH_imm_a(){
     uint16_t address = 0xFF00 | read_byte(reg->pc++);
     save_byte(address, reg->a);
+    update_timers(12);
 }
 
 // Load value from memory in [0xFF00 + n], where n is an 8 bit immediate value, into A
 void LDH_imm_a(){
-    uint8_t low = read_byte(reg->pc++);
-    uint8_t high = read_byte(reg->pc++);
-    uint16_t address = low | (high << 8);
+    uint16_t address = 0xFF00 | read_byte(reg->pc++);
     reg->a = read_byte(address);
+    update_timers(12);
 }
 
 // Save value in HL, being value of SP + n, where n is an 8 bit signed immediate value
@@ -498,56 +567,63 @@ void SV_nn_sp(){
     uint16_t address = low | (high << 8);
     save_byte(address, (uint8_t)(reg->sp & 0xFF));
     save_byte(address+1, (uint8_t)(reg->sp >> 8));
+    update_timers(20);
 }
 
 // Put value at address HL into A. Decrement HL
 void LDD_a_hl() {
     reg->a = read_byte(reg->hl);
     --reg->hl;
+    update_timers(8);
 }
 
 // Put A into memory address HL. Decrement HL.
 void SVD_a_hl() {
     save_byte(reg->hl, reg->a);
     --reg->hl;
+    update_timers(8);
 }
 
 // Put value at address HL into A. Increment HL
 void LDI_a_hl() {
     reg->a = read_byte(reg->hl);
     ++reg->hl;
+    update_timers(8);
 }
 
 // Put A into memory address HL. Increment HL.
 void SVI_a_hl() {
     save_byte(reg->hl, reg->a);
     ++reg->hl;
+    update_timers(8);
 }
 
 // Add to register a value from [hl]
 void ADD_A_hl(){
     uint8_t val = read_byte(reg->hl);
     uint16_t result = reg->a + val;
-    if ((result & 0xFF) == 0) \
-        reg->f |= 0x80; \
-    if (((reg->a & 0x0F) + (val & 0x0F)) > 0xF) \
-        reg->f |= 0x20; \
-    if (result > 0xFF) \
-        reg->f |= 0x10; \
-    reg->a = (uint8_t) result; \
+    if ((result & 0xFF) == 0) 
+        reg->f |= 0x80; 
+    if (((reg->a & 0x0F) + (val & 0x0F)) > 0xF) 
+        reg->f |= 0x20; 
+    if (result > 0xFF) 
+        reg->f |= 0x10; 
+    reg->a = (uint8_t) result; 
+    update_timers(8);
 }
 
 // Add to register an immediate value
 void ADD_A_n(){
     uint8_t val = read_byte(reg->pc++);
     uint16_t result = reg->a + val;
-    if ((result & 0xFF) == 0) \
-        reg->f |= 0x80; \
-    if (((reg->a & 0x0F) + (val & 0x0F)) > 0xF) \
-        reg->f |= 0x20; \
-    if (result > 0xFF) \
-        reg->f |= 0x10; \
-    reg->a = (uint8_t) result; \
+    if ((result & 0xFF) == 0) 
+        reg->f |= 0x80; 
+    if (((reg->a & 0x0F) + (val & 0x0F)) > 0xF) 
+        reg->f |= 0x20; 
+    if (result > 0xFF) 
+        reg->f |= 0x10;
+    reg->a = (uint8_t) result; 
+    update_timers(8);
 }
 
 // Add to register value from [hl] + carry bit
@@ -563,6 +639,7 @@ void ADC_A_hl(){
     if (result > 0xFF) 
         reg->f |= 0x10; 
     reg->a = (uint8_t)result; 
+    update_timers(8);
 }
 
 // Add to register an immediate value + carry bit
@@ -578,6 +655,7 @@ void ADC_A_n(){
     if (result > 0xFF) 
         reg->f |= 0x10; 
     reg->a = (uint8_t)result; 
+    update_timers(8);
 }
 
 // substract [hl] from a
@@ -592,6 +670,7 @@ void SUB_A_hl(){
     if (result < 0) 
         reg->f |= 0x10; 
     reg->a = (uint8_t)result; 
+    update_timers(8);
 }
 
 // substract n from a
@@ -606,36 +685,39 @@ void SUB_A_n(){
     if (result < 0) 
         reg->f |= 0x10; 
     reg->a = (uint8_t)result; 
+    update_timers(8);
 }
 
 // substract [hl] - carry bit from register a
-void SBC_A_hl(){ \
-    uint8_t val = read_byte(reg->hl); \
-    uint8_t carry = (reg->f & 0x40) ? 1 : 0; \
-    int16_t result = (int16_t)reg->a - (int16_t)val - carry; \
-    reg->f = 0x40; \
-    if ((result & 0xFF) == 0) \
-        reg->f |= 0x80; \
-    if (((reg->a & 0x0F) - (val & 0x0F)) < 0) \
-        reg->f |= 0x20; \
-    if (result < 0) \
-        reg->f |= 0x10; \
-    reg->a = (uint8_t)result; \
+void SBC_A_hl(){ 
+    uint8_t val = read_byte(reg->hl); 
+    uint8_t carry = (reg->f & 0x10) ? 1 : 0; 
+    int16_t result = (int16_t)reg->a - (int16_t)val - carry; 
+    reg->f = 0x40; 
+    if ((result & 0xFF) == 0) 
+        reg->f |= 0x80; 
+    if (((reg->a & 0x0F) - (val & 0x0F)) < 0) 
+        reg->f |= 0x20; 
+    if (result < 0) 
+        reg->f |= 0x10; 
+    reg->a = (uint8_t)result; 
+    update_timers(8);
 }
 
 //substract immediate value - carry bit from register a
-void SBC_A_imm(){ \
-    uint8_t val = read_byte(reg->pc++); \
-    uint8_t carry = (reg->f & 0x40) ? 1 : 0; \
-    int16_t result = (int16_t)reg->a - (int16_t)val - carry; \
-    reg->f = 0x40; \
-    if ((result & 0xFF) == 0) \
-        reg->f |= 0x80; \
-    if (((reg->a & 0x0F) - (val & 0x0F)) < 0) \
-        reg->f |= 0x20; \
-    if (result < 0) \
-        reg->f |= 0x10; \
-    reg->a = (uint8_t)result; \
+void SBC_A_imm(){ 
+    uint8_t val = read_byte(reg->pc++); 
+    uint8_t carry = (reg->f & 0x10) ? 1 : 0; 
+    int16_t result = (int16_t)reg->a - (int16_t)val - carry; 
+    reg->f = 0x40; 
+    if ((result & 0xFF) == 0) 
+        reg->f |= 0x80; 
+    if (((reg->a & 0x0F) - (val & 0x0F)) < 0) 
+        reg->f |= 0x20; 
+    if (result < 0) 
+        reg->f |= 0x10; 
+    reg->a = (uint8_t)result; 
+    update_timers(8);
 }
 
 // AND between register a and value in [hl]
@@ -645,6 +727,7 @@ void AND_A_hl() {
     if ((reg->a & val) == 0)  
         reg->f |= 0x80; 
     reg->a &= val; 
+    update_timers(8);
 }
 
 // AND between register a and immediate value
@@ -654,6 +737,7 @@ void AND_A_n() {
     if ((reg->a & val) == 0)  
         reg->f |= 0x80; 
     reg->a &= val; 
+    update_timers(8);
 }
 
 // OR between register a and value in [hl]
@@ -663,6 +747,7 @@ void OR_A_hl() {
     if ((reg->a | val) == 0) 
         reg->f |= 0x80; 
     reg->a |= val;
+    update_timers(8);
 }
 
 // OR between register a and immediate value
@@ -672,15 +757,17 @@ void OR_A_n() {
     if ((reg->a | val) == 0) 
         reg->f |= 0x80; 
     reg->a |= val;
+    update_timers(8);
 }
 
 // XOR between register a and value in [hl]
 void XOR_A_hl() {
-    uint8_t val = read_byte(reg->hl++);
+    uint8_t val = read_byte(reg->hl);
     reg->f = 0x0; 
     if ((reg->a ^ val) == 0) 
         reg->f |= 0x80; 
     reg->a ^= val;
+    update_timers(8);
 }
 
 // XOR between register a and immediate value
@@ -690,6 +777,7 @@ void XOR_A_n() {
     if ((reg->a ^ val) == 0) 
         reg->f |= 0x80; 
     reg->a ^= val;
+    update_timers(8);
 }
 
 // CMP between A and [hl]
@@ -703,6 +791,7 @@ void CP_A_hl() {
         reg->f |= 0x20; 
     if (result < 0) 
         reg->f |= 0x10; 
+    update_timers(8);
 }
 
 // CMP between A and immediate value
@@ -716,6 +805,7 @@ void CP_A_n() {
         reg->f |= 0x20; 
     if (result < 0) 
         reg->f |= 0x10; 
+    update_timers(8);
 }
 
 // INC value in [hl]
@@ -728,6 +818,7 @@ void INC_REGhl() {
     save_byte(reg->hl, val);  
     if (val == 0) 
         reg->f |= 0x80; 
+    update_timers(12);
 }
 
 // DEC value in [hl]
@@ -741,6 +832,7 @@ void DEC_REGhl() {
     if(val == 0)
         reg->f |= 0x80;
     save_byte(reg->hl, val);
+    update_timers(12);
 }
 
 // add immediate value to stack pointer
@@ -753,6 +845,7 @@ void ADD_SP_n() {
     if((reg->sp & 0xFF) + (imm & 0xFF) > 0xFF)
         reg->f |= 0x10;
     reg->sp += val;
+    update_timers(16);
 }
 
 // swap bit 0-3 and 4-7 in [hl]
@@ -763,6 +856,7 @@ void SWAP_hl() {
         reg-> f = 0x80; 
     val = (val << 4) | (val >> 4); 
     save_byte(reg->hl, val);
+    update_timers(16); \
 }
 
 // Decimal adjust register A from binary to BCD. 
@@ -770,17 +864,21 @@ void DAA() {
     uint8_t correction = 0;
     bool carry = false;
     if (!(reg->f & 0x40)) {
+        // if there is a half carry or bit 0-3 are greater than 9
         if ((reg->f & 0x20) || (reg->a & 0x0F) > 0x09) {
             correction |= 0x06;
         }
+        // if there is a full carry or register A is greater than 99
         if ((reg->f & 0x10) || reg->a > 0x99) {
             correction |= 0x60;
             carry = true;
         }
     } else { 
+        // if there is a half carry
         if (reg->f & 0x20) {
             correction |= 0x06;
         }
+        // if there is a full carry
         if (reg->f & 0x10) {
             correction |= 0x60;
             carry = true; 
@@ -798,44 +896,60 @@ void DAA() {
         reg->f |= 0x80; 
     if (carry) 
         reg->f |= 0x10;   
+    update_timers(4);
 }
 
 // flip a register
 void CPL() {
     reg->a ^= 0xFF;
     reg->f |= 0x60;
+    update_timers(4);
 }
 
 // Complement carry flag
 void CCF() {
     reg->f ^= 0x10;   
     reg->f &= ~0x60;  
+    update_timers(4);
 }
 
 // Set Carry flag
 void SCF() {
     reg->f &= ~0x60;  
     reg->f |= 0x10; 
+    update_timers(4);
 }
 
 // Halt CPU
 void HALT() {
 
+    update_timers(4);
 }
 
 // Halt CPU and Display
 void STOP() {
 
+    update_timers(4);
 }
 
 // disable interrupts after the instruction (cycles)
+/*
+This instruction disables interrupts but not
+immediately. Interrupts are disabled after
+instruction after DI is executed.
+*/
 void DI() {
-
+    ei = false;
+    ime_next = 1;
+    update_timers(4);
 }
 
 // enable interrupts after the instruction (cycles)
+// same shis
 void EI() {
-
+    ei = true;
+    ime_next = 1;
+    update_timers(4);
 }
 
 // Rotate [hl] left. Old bit 7 to Carry flag.
@@ -848,6 +962,7 @@ void RCL_hl() {
     reg->f |= (carry << 4);
     if(reg->a == 0)
         reg->f |= 0x80;
+    update_timers(16);
 }
 
 // Rotate [hl] left through Carry flag
@@ -860,6 +975,7 @@ void RL_hl() {
     reg->f = (new << 4);
     if(val == 0)
         reg->f |= 0x80;
+    update_timers(16);
 }
 
 // Rotate [hl] right. Old bit 0 to Carry flag.
@@ -872,6 +988,7 @@ void RRC_hl() {
     reg->f |= (carry << 4);
     if(val == 0)
         reg->f |= 0x80;
+    update_timers(16);
 }
 
 // Rotate [hl] right through Carry flag
@@ -884,6 +1001,7 @@ void RR_hl() {
     reg->f = (new << 4);
     if(val == 0)
         reg->f |= 0x80;
+    update_timers(16);
 }
 
 // shift left [hl]
@@ -895,6 +1013,7 @@ void SL_hl() {
     save_byte(reg->hl, val);
     if (val == 0) 
         reg->f |= 0x80; 
+    update_timers(16);
 }
 
 // shift right [hl] preserving msb
@@ -907,6 +1026,7 @@ void SRA_hl() {
     reg->f = (carry << 4); 
     if (val == 0x0) 
         reg->f |= 0x80; 
+    update_timers(16);
 }
 
 // shift right [hl] without preserving msb
@@ -918,6 +1038,7 @@ void SRL_hl() {
     reg->f = (carry << 4); 
     if (val == 0x0) 
         reg->f |= 0x80; 
+    update_timers(16);
 }
 
 // tests bit n in [hl]
@@ -929,6 +1050,7 @@ void BIT_hl() {
     reg->f |= 0x20; 
     if (!(val & mask))
         reg->f |= 0x80; 
+    update_timers(16);
 }
 
 // set bit n in [hl]
@@ -938,6 +1060,7 @@ void SET_hl() { \
     uint8_t mask = 1 << bit;
     val |= mask; 
     save_byte(reg->hl, val);
+    update_timers(16);
 }
 
 // reset bit n in [hl]
@@ -947,6 +1070,7 @@ void RESET_hl() { \
     uint8_t mask = ~(1 << bit);
     val &= mask;
     save_byte(reg->hl, val);
+    update_timers(16);
 }
 
 // jp to address
@@ -955,11 +1079,13 @@ void JP() {
     uint8_t high = read_byte(reg->pc++);
     uint16_t address = (high << 8) | low;
     reg->pc = address;
+    update_timers(16);
 }
 
  // jp to address in hl
 void JP_hl() {
     reg->pc = reg->hl;
+    update_timers(4);
 }
 
 // jp if some flags are set
@@ -986,45 +1112,57 @@ void JP_COND() {
     
     }
     if(condition_met){
-        uint16_t address = read_byte(reg->pc++) | (read_byte(reg->pc) << 8);
+        uint8_t low = read_byte(reg->pc++);
+        uint8_t high = read_byte(reg->pc);
+        uint16_t address = (high << 8) | low ;
         reg->pc = address;
+        update_timers(16);
+    } else {
+        update_timers(12);
     }
-    
 }
 
 // add n to current address
 void JR() {
     int8_t n = (int8_t) read_byte(reg->pc++);
     reg->pc = (uint16_t)(reg->pc + n);
+    update_timers(12);
 }
 
 // add n to current address if some flags are set
 void JR_COND() {
+    bool condition_met = false;
     int8_t val = read_byte(reg->pc++);
     switch (opcode) {
     case 0x20:
         if (!(reg->f & 0x80)){
-            reg->pc = (uint16_t) reg->pc + val;
+            condition_met = true;
         }
         break;
     
     case 0x28:
         if (reg->f & 0x80){
-            reg->pc = (uint16_t) reg->pc + val;
+            condition_met = true;
         }
         break;
     
     case 0x30:
         if (!(reg->f & 0x10)){
-            reg->pc = (uint16_t) reg->pc + val;
+            condition_met = true;
         }
         break;
 
     case 0x38:
         if (reg->f & 0x10){
-            reg->pc = (uint16_t) reg->pc + val;
+            condition_met = true;
         }
         break;
+    }
+    if(condition_met){
+        reg->pc = (uint16_t) reg->pc + val;
+        update_timers(12);
+    } else {
+        update_timers(8);
     }
 } 
 
@@ -1035,40 +1173,42 @@ void CALL() {
     save_byte(--reg->sp, (reg->pc >> 8) & 0xFF);
     save_byte(--reg->sp, reg->pc & 0xFF);
     reg->pc = address;
+    update_timers(24);
 }
 
 void CALL_COND() {
+    bool condition_met = false;
     uint8_t low = read_byte(reg->pc++);
     uint8_t high = read_byte(reg->pc++);
     uint16_t address = (high<<8) | low;
     switch (opcode) {
     case 0xC4:       
         if(!(reg->f & 0x80)) {
-            save_byte(--reg->sp, (reg->pc >> 8) & 0xFF);
-            save_byte(--reg->sp, reg->pc & 0xFF);
-            reg->pc = address;
+            condition_met = true;
         }
         break;
     case 0xCC:
         if(reg->f & 0x80) {
-            save_byte(--reg->sp, (reg->pc >> 8) & 0xFF);
-            save_byte(--reg->sp, reg->pc & 0xFF);
-            reg->pc = address;
+            condition_met = true;
         }
         break;
     case 0xD4:
         if(!(reg->f & 0x10)) {
-            save_byte(--reg->sp, (reg->pc >> 8) & 0xFF);
-            save_byte(--reg->sp, reg->pc & 0xFF);
-            reg->pc = address;
+            condition_met == true;
         }
         break;
     case 0xDC:
         if(reg->f & 0x10) {
-            save_byte(--reg->sp, (reg->pc >> 8) & 0xFF);
-            save_byte(--reg->sp, reg->pc & 0xFF);
-            reg->pc = address;
+            condition_met = true;
         }
+    }
+    if(condition_met){
+        save_byte(--reg->sp, (reg->pc >> 8) & 0xFF);
+        save_byte(--reg->sp, reg->pc & 0xFF);
+        reg->pc = address;
+        update_timers(24);
+    } else {
+        update_timers(12);
     }
 }
 
@@ -1101,14 +1241,16 @@ void RST() {
     save_byte(--reg->sp, (reg->pc >> 8) & 0xFF);
     save_byte(--reg->sp, reg->pc & 0xFF);
     reg->pc = 0x0000 + offset;
+    update_timers(16);
 }
 
 // Pop two bytes from stack & jump to that address
 void RET() {
-    uint8_t low = read_byte(reg->pc++);
-    uint8_t high = read_byte(reg->pc++);
+    uint8_t low = read_byte(reg->sp++);
+    uint8_t high = read_byte(reg->sp++);
     uint16_t address = (high<<8) | low;
     reg->pc = address;
+    update_timers(16);
 }
 
 // Pop two bytes from stack & jump to that address if cond is met
@@ -1136,7 +1278,10 @@ void RET_COND() {
     if (condition_met) {
         uint8_t low = read_byte(reg->sp++);
         uint8_t high = read_byte(reg->sp++);
-        reg->pc = (high << 8) | low;   
+        reg->pc = (high << 8) | low;  
+        update_timers(20); 
+    } else {
+        update_timers(8);
     }
 }
 
@@ -1146,6 +1291,8 @@ void RETI() {
     uint8_t high = read_byte(reg->sp++);
     uint16_t address = (high<<8) | low;
     reg->pc = address;
+    update_timers(16);
+    ime = true;
 }
 
 GEN_RESET_n(a);
@@ -1435,14 +1582,6 @@ GEN_LD_R1_R2(l, e);
 GEN_LD_R1_R2(l, h);
 GEN_LD_R1_R2(l, l);
 
-GEN_SV_n_hl(a);
-GEN_SV_n_hl(b);
-GEN_SV_n_hl(c);
-GEN_SV_n_hl(d);
-GEN_SV_n_hl(e);
-GEN_SV_n_hl(h);
-GEN_SV_n_hl(l);
-
 GEN_LD_n_hl(a);
 GEN_LD_n_hl(b);
 GEN_LD_n_hl(c);
@@ -1713,7 +1852,7 @@ instruction_ptr opcode_table[256] = {
     [0xE5] = PUSH_hl, // PUSH HL
     [0xE6] = AND_A_n, // AND n
     [0xE7] = RST, // RST 20
-    [0xE8] = NULL, // ADD SP, d
+    [0xE8] = ADD_SP_n, // ADD SP, d
     [0xE9] = JP_hl, // JP (HL)
     [0xEA] = SV_nn_a, // LD (nn), A
     [0xEB] = NULL, // XX (Invalid)
@@ -2032,8 +2171,10 @@ instruction_ptr prefix_opcode_table[256] = {
 };
 
 void prefix_function() {
+    prefix_flag = true;
     opcode = read_byte(reg->pc++);
     prefix_opcode_table[opcode]();
+    prefix_flag = false;
 }
 
 #endif
