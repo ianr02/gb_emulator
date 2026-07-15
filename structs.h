@@ -8,6 +8,9 @@
 #define GAMEBOY_MEMORY_SIZE (1 << 16) // 64KB
 #define INIT_PC 0x0100
 
+// Input Registers
+#define _JOYP 0xFF00
+
 // Timer Registers
 #define _DIV  0xFF04
 #define _TIMA 0xFF05

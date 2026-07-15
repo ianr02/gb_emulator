@@ -23,6 +23,7 @@ uint8_t read_byte(uint16_t address) {
     } else if (address >= 0xFE00 && address <= 0xFE9F) {
         return memory->oam[address - 0xFE00];
     } else if (address >= 0xFF00 && address <= 0xFF7F){
+        if (address == _JOYP)  return 0xC0 | (memory->io[0] & 0x30) | 0x0F;
         return memory->io[address - 0xFF00];
     } else if (address >= 0xFF80 && address <= 0xFFFE){
         return memory->hram[address - 0xFF80];
@@ -47,6 +48,7 @@ int save_byte(uint16_t address, uint8_t val){
         memory->oam[address - 0xFE00] = val;
     } else if (address >= 0xFF00 && address <= 0xFF7F){
         if (address == _DIV) internalClock = 0;
+        else if (address == _JOYP) memory->io[0] = val & 0x30;
         else memory->io[address - 0xFF00] = val;
     } else if (address >= 0xFF80 && address <= 0xFFFE){
         memory->hram[address - 0xFF80] = val;
@@ -59,6 +61,9 @@ int save_byte(uint16_t address, uint8_t val){
 }
 
 void init_io_ports(void) {
+    // Input Default
+    save_byte(_JOYP, 0x30);
+
     // Timer Defaults
     save_byte(_TIMA, 0x0);
     save_byte(_TMA, 0x0);
@@ -108,19 +113,15 @@ void init_io_ports(void) {
 
 void update_timers(uint8_t cycles) {
     uint8_t tac = read_byte(_TAC);
-    
     for (int i = 0; i < cycles; i++) {
         uint16_t oldClock = internalClock;
         internalClock++;
-        
         // Only check for overflow if timer is enabled
         if (tac & 0x04) {
-            uint8_t bitPos[] = {9, 3, 5, 7}; 
-            uint8_t bit = bitPos[tac & 0x03];
-            
+            static const uint8_t bitPos[] = {9, 3, 5, 7}; 
+            uint8_t bit = bitPos[tac & 0x03];  
             int oldBit = (oldClock >> bit) & 1;
             int newBit = (internalClock >> bit) & 1;
-            
             if (oldBit == 1 && newBit == 0) {
                 uint8_t tima = read_byte(_TIMA) + 1;
                 if (tima == 0) {
@@ -133,6 +134,27 @@ void update_timers(uint8_t cycles) {
         }
     }
     memory->io[_DIV - 0xff00] = (internalClock >> 8) & 0xFF;
+}
+
+void handle_interrupts() {
+    uint8_t pending = read_byte(_IF) & memory->ie & 0x1F;
+    if (!pending) return;
+
+    static const uint16_t vectors[] = {0x40, 0x48, 0x50, 0x58, 0x60};
+    for (int i = 0; i < 5; i++) {
+        uint8_t bit = 1 << i;
+        if (pending & bit) {
+            ime = false;
+            update_timers(20);
+            save_byte(--reg->sp, (reg->pc >> 8) & 0xFF);
+            save_byte(--reg->sp, reg->pc & 0xFF);
+            uint8_t if_reg = read_byte(_IF);
+            save_byte(_IF, if_reg & ~bit);
+
+            reg->pc = vectors[i];
+            break;
+        }
+    }
 }
 
 // load inmediate value into register (checked)
@@ -602,6 +624,7 @@ void SVI_a_hl() {
 void ADD_A_hl(){
     uint8_t val = read_byte(reg->hl);
     uint16_t result = reg->a + val;
+    reg->f = 0;
     if ((result & 0xFF) == 0) 
         reg->f |= 0x80; 
     if (((reg->a & 0x0F) + (val & 0x0F)) > 0xF) 
@@ -616,6 +639,7 @@ void ADD_A_hl(){
 void ADD_A_n(){
     uint8_t val = read_byte(reg->pc++);
     uint16_t result = reg->a + val;
+    reg->f = 0;
     if ((result & 0xFF) == 0) 
         reg->f |= 0x80; 
     if (((reg->a & 0x0F) + (val & 0x0F)) > 0xF) 
@@ -922,13 +946,22 @@ void SCF() {
 
 // Halt CPU
 void HALT() {
-
     update_timers(4);
+    if (ime) {
+        while (!(read_byte(_IF) & memory->ie))
+            update_timers(4);
+        handle_interrupts();
+    } else if (!(read_byte(_IF) & memory->ie)){
+        while (!(read_byte(_IF) & memory->ie))
+            update_timers(4);
+    } else {
+        update_timers(4);
+    }
 }
 
 // Halt CPU and Display
 void STOP() {
-
+    ++reg->pc;
     update_timers(4);
 }
 
@@ -953,7 +986,7 @@ void EI() {
 }
 
 // Rotate [hl] left. Old bit 7 to Carry flag.
-void RCL_hl() {
+void RLC_hl() {
     reg->f = 0x0;
     uint8_t val = read_byte(reg->hl);
     uint8_t carry = (val & 0x80) >> 7;
@@ -1888,7 +1921,7 @@ instruction_ptr prefix_opcode_table[256] = {
     [0x03] = RLC_e, // RLC E
     [0x04] = RLC_h, // RLC H
     [0x05] = RLC_l, // RLC L
-    [0x06] = RCL_hl, // RLC (HL)
+    [0x06] = RLC_hl, // RLC (HL)
     [0x07] = RLC_a, // RLC A
     [0x08] = RRC_b, // RRC B
     [0x09] = RRC_c, // RRC C
