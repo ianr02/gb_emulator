@@ -4,9 +4,13 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <stdio.h>
 
 #define GAMEBOY_MEMORY_SIZE (1 << 16) // 64KB
 #define INIT_PC 0x0100
+
+// OAM DMA transfer
+#define _DMA  0xFF46
 
 // Input Registers
 #define _JOYP 0xFF00
@@ -47,8 +51,10 @@
 
 // Video/PPU Registers
 #define _LCDC 0xFF40
+#define _STAT 0xFF41
 #define _SCY  0xFF42
 #define _SCX  0xFF43
+#define _LY   0xFF44
 #define _LYC  0xFF45
 #define _BGP  0xFF47
 #define _OBP0 0xFF48
@@ -62,6 +68,7 @@
 
 
 typedef void (*instruction_ptr)(void);
+
 typedef struct {
     uint8_t rom[0x8000];    // 32KB Cartridge (Bank 0 and 1)
     uint8_t vram[0x2000];   // 8KB Video RAM
@@ -113,6 +120,13 @@ typedef struct {
     uint16_t sp;
     uint16_t pc;
 } registers;
+
+static const uint32_t shades[4] = {
+    0xFFFFFF,  // white
+    0xAAAAAA,  // light gray
+    0x555555,  // dark gray
+    0x000000   // black
+};
 
 GameBoyMemory *memory;
 registers *reg;
