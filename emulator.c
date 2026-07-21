@@ -33,7 +33,6 @@ int main(int argc, char *argv[]) {
     }
 
     fread(memory->rom, 1, 0x8000, file);
-    fclose(file);
 
     SDL_Init(SDL_INIT_VIDEO);
     ppu_window   = SDL_CreateWindow("Game Boy", SDL_WINDOWPOS_CENTERED,
@@ -67,7 +66,7 @@ int main(int argc, char *argv[]) {
             handle_interrupts();
         }
         opcode = read_byte(reg->pc);
-        // printf("PC: 0x%04X | Opcode: 0x%02X\n", reg->pc, opcode);
+        printf("PC: 0x%04X | Opcode: 0x%02X\n", reg->pc, opcode);
         ++reg->pc;
         if (opcode_table[opcode] != NULL) {
             opcode_table[opcode]();

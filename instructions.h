@@ -376,6 +376,7 @@ void handle_interrupts() {
         uint8_t bit = 1 << i;
         if (pending & bit) {
             ime = false;
+            ime_next = -1;
             update_timers(20);
             save_byte(--reg->sp, (reg->pc >> 8) & 0xFF);
             save_byte(--reg->sp, reg->pc & 0xFF);
@@ -435,7 +436,7 @@ void SV_##reg_addr##_##reg_name() { \
 // load form value in reg2 + 0xFF00 ($FF00) into reg1
 #define GEN_LD_REG_REG(reg1, reg2) \
 void SLD_##reg1##_##reg2() { \
-    reg->reg1 = 0xFF00 |reg->reg2; \
+    reg->reg1 = read_byte(0xFF00 |reg->reg2); \
     update_timers(8); \
 }
 
@@ -531,7 +532,7 @@ void SBC_A_##reg_name(){ \
     reg->f = 0x40; \
     if ((result & 0xFF) == 0) \
         reg->f |= 0x80; \
-    if (((reg->a & 0x0F) - (val & 0x0F)) < 0) \
+    if (((reg->a & 0x0F) - (val & 0x0F) - carry) < 0) \
         reg->f |= 0x20; \
     if (result < 0) \
         reg->f |= 0x10; \
@@ -950,7 +951,7 @@ void SBC_A_hl(){
     reg->f = 0x40; 
     if ((result & 0xFF) == 0) 
         reg->f |= 0x80; 
-    if (((reg->a & 0x0F) - (val & 0x0F)) < 0) 
+    if (((reg->a & 0x0F) - (val & 0x0F) - carry) < 0) 
         reg->f |= 0x20; 
     if (result < 0) 
         reg->f |= 0x10; 
@@ -966,7 +967,7 @@ void SBC_A_imm(){
     reg->f = 0x40; 
     if ((result & 0xFF) == 0) 
         reg->f |= 0x80; 
-    if (((reg->a & 0x0F) - (val & 0x0F)) < 0) 
+    if (((reg->a & 0x0F) - (val & 0x0F) - carry) < 0) 
         reg->f |= 0x20; 
     if (result < 0) 
         reg->f |= 0x10; 
@@ -1384,11 +1385,12 @@ void JP_COND() {
     }
     if(condition_met){
         uint8_t low = read_byte(reg->pc++);
-        uint8_t high = read_byte(reg->pc);
+        uint8_t high = read_byte(reg->pc++);
         uint16_t address = (high << 8) | low ;
         reg->pc = address;
         update_timers(16);
     } else {
+        read_byte(reg->pc++); read_byte(reg->pc++);
         update_timers(12);
     }
 }
