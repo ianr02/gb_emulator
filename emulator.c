@@ -66,14 +66,14 @@ int main(int argc, char *argv[]) {
             handle_interrupts();
         }
         opcode = read_byte(reg->pc);
-        printf("PC: 0x%04X | Opcode: 0x%02X\n", reg->pc, opcode);
+        // printf("PC: 0x%04X | Opcode: 0x%02X\n", reg->pc, opcode);
         ++reg->pc;
         if (opcode_table[opcode] != NULL) {
             opcode_table[opcode]();
         } else {
             exit(EXIT_FAILURE);
         }
-        
+
         if (ime_next >= 0) {
             if (ime_next == 0) {
                 ime = ei;            
