@@ -16,7 +16,7 @@ int main(int argc, char *argv[]) {
         printf("Usage: %s <path_to_rom>\n", argv[0]);
         return 1;
     }
-    memory = malloc(GAMEBOY_MEMORY_SIZE);
+    memory = calloc(GAMEBOY_MEMORY_SIZE, sizeof(uint8_t));
     reg = malloc(sizeof(registers));
     init_io_ports();
     reg->pc = INIT_PC;
@@ -67,7 +67,7 @@ int main(int argc, char *argv[]) {
             handle_interrupts();
         }
         opcode = read_byte(reg->pc);
-        printf("PC: 0x%04X | Opcode: 0x%02X\n", reg->pc, opcode);
+        // printf("PC: 0x%04X | Opcode: 0x%02X\n", reg->pc, opcode);
         ++reg->pc;
         if (opcode_table[opcode] != NULL) {
             opcode_table[opcode]();
@@ -82,6 +82,7 @@ int main(int argc, char *argv[]) {
             ime_next--;
         }
     }
+    printf("exiting");
     SDL_DestroyTexture(ppu_texture);
     SDL_DestroyRenderer(ppu_renderer);
     SDL_DestroyWindow(ppu_window);
