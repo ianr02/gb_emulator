@@ -51,10 +51,10 @@ int main(int argc, char *argv[]) {
             else if (e.type == SDL_KEYDOWN || e.type == SDL_KEYUP) {
                 bool pressed = (e.type == SDL_KEYDOWN);
                 switch (e.key.keysym.sym) {
-                    case SDLK_RIGHT:   joypad_dpad = pressed ? joypad_dpad & ~1  : joypad_dpad | 1;  break;
-                    case SDLK_LEFT:    joypad_dpad = pressed ? joypad_dpad & ~2  : joypad_dpad | 2;  break;
-                    case SDLK_UP:      joypad_dpad = pressed ? joypad_dpad & ~4  : joypad_dpad | 4;  break;
-                    case SDLK_DOWN:    joypad_dpad = pressed ? joypad_dpad & ~8  : joypad_dpad | 8;  break;
+                    case SDLK_RIGHT:   joypad_dpad = pressed ? joypad_dpad & ~1  : joypad_dpad | 1;  break; // right
+                    case SDLK_LEFT:    joypad_dpad = pressed ? joypad_dpad & ~2  : joypad_dpad | 2;  break; // left
+                    case SDLK_UP:      joypad_dpad = pressed ? joypad_dpad & ~4  : joypad_dpad | 4;  break; // up
+                    case SDLK_DOWN:    joypad_dpad = pressed ? joypad_dpad & ~8  : joypad_dpad | 8;  break; // down
                     case SDLK_z:       joypad_btn  = pressed ? joypad_btn & ~1   : joypad_btn | 1;   break;  // A
                     case SDLK_x:       joypad_btn  = pressed ? joypad_btn & ~2   : joypad_btn | 2;   break;  // B
                     case SDLK_RSHIFT:  joypad_btn  = pressed ? joypad_btn & ~4   : joypad_btn | 4;   break;  // Select
@@ -72,7 +72,6 @@ int main(int argc, char *argv[]) {
         if (opcode_table[opcode] != NULL) {
             opcode_table[opcode]();
         } else {
-            printf("Error: Unimplemented Opcode 0x%02X at 0x%04X\n", opcode, reg->pc - 1);
             exit(EXIT_FAILURE);
         }
         if (ime_next >= 0) {

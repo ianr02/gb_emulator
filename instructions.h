@@ -1179,11 +1179,11 @@ void SCF() {
 void HALT() {
     update_timers(4);
     if (ime) {
-        while (!(read_byte(_IF) & memory->ie))
+        while (!(memory->io[_IF - 0xFF00] & memory->ie))
             update_timers(4);
         handle_interrupts();
-    } else if (!(read_byte(_IF) & memory->ie)){
-        while (!(read_byte(_IF) & memory->ie))
+    } else if (!(memory->io[_IF - 0xFF00] & memory->ie)){
+        while (!(memory->io[_IF - 0xFF00] & memory->ie))
             update_timers(4);
     } else {
         update_timers(4);
@@ -1194,6 +1194,14 @@ void HALT() {
 void STOP() {
     ++reg->pc;
     update_timers(4);
+    // Wait for any interrupt (like HALT, but also affects LCD)
+    if (ime) {
+        while (!(memory->io[_IF - 0xFF00] & memory->ie))
+            update_timers(4);
+    } else {
+        while (!(memory->io[_IF - 0xFF00] & 0x1F))    // IF has ANY bit set?
+            update_timers(4);
+    }
 }
 
 // disable interrupts after the instruction (cycles)
