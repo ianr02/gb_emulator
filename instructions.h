@@ -46,11 +46,11 @@ void render_scanline(uint8_t ly) {
             uint16_t scroll_x = (x + scx) & 0xFF;
             uint16_t scroll_y = (ly + scy) & 0xFF;
             uint16_t map_addr = map_base + (scroll_y / 8) * 32 + (scroll_x / 8);
-            int8_t tile = memory->vram[map_addr - 0x8000];
+            uint8_t tile = memory->vram[map_addr - 0x8000];
 
             uint16_t tile_addr;
             if (signed_mode)
-                tile_addr = 0x9000 + tile * 16;
+                tile_addr = 0x9000 + (int8_t)tile * 16;
             else
                 tile_addr = 0x8000 + tile * 16;
 
@@ -83,11 +83,11 @@ void render_scanline(uint8_t ly) {
                 if (win_x < 0) continue;
 
                 uint16_t map_addr = win_map + ((ly - wy) / 8) * 32 + (win_x / 8);
-                int8_t tile = memory->vram[map_addr - 0x8000];
+                uint8_t tile = memory->vram[map_addr - 0x8000];
 
                 uint16_t tile_addr;
                 if (signed_mode)
-                    tile_addr = 0x9000 + tile * 16;
+                    tile_addr = 0x9000 + (int8_t)tile * 16;
                 else
                     tile_addr = 0x8000 + tile * 16;
 
@@ -2038,7 +2038,7 @@ instruction_ptr opcode_table[256] = {
     [0x98] = SBC_A_b, // SBC
     [0x99] = SBC_A_c,
     [0x9A] = SBC_A_d,
-    [0X9B] = SBC_A_e,
+    [0x9B] = SBC_A_e,
     [0x9C] = SBC_A_h,
     [0x9D] = SBC_A_l,
     [0x9E] = SBC_A_hl,
