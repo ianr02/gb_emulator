@@ -9,68 +9,19 @@ extern uint8_t opcode;
 
 extern SDL_Texture *ppu_texture;
 extern SDL_Renderer *ppu_renderer;
-extern uint32_t framebuffer[160 * 144];
 
 extern uint8_t joypad_dpad;
 extern uint8_t joypad_btn;
-extern const uint32_t shades[4];
+
+uint32_t framebuffer[160 * 144];
+const uint32_t shades[4] = {
+    0xFFFFFF,  // white
+    0xAAAAAA,  // light gray
+    0x555555,  // dark gray
+    0x000000   // black
+};
 
 void prefix_function();
-
-void init_io_ports(void) {
-    // Input Default
-    save_byte(_JOYP, 0x30);
-
-
-    save_byte(_LY,   0x00);
-    save_byte(_STAT, 0x00);
-
-    // Timer Defaults
-    save_byte(_TIMA, 0x0);
-    save_byte(_TMA, 0x0);
-    save_byte(_TAC, 0x0);
-
-    // Audio Defaults (Channel 1)
-    save_byte(_NR10, 0x80);
-    save_byte(_NR11, 0xBF);
-    save_byte(_NR12, 0xF3);
-    save_byte(_NR14, 0xBF);
-    
-    // Audio Defaults (Channel 2)
-    save_byte(_NR21, 0x3F);
-    save_byte(_NR22, 0x0);
-    save_byte(_NR24, 0xBF);
-
-    // Audio Defaults (Channel 3)
-    save_byte(_NR30, 0x7F);
-    save_byte(_NR31, 0xFF);
-    save_byte(_NR32, 0x9F);
-    save_byte(_NR33, 0xBF);
-
-    // Audio Channel 4 & Master Controls
-    save_byte(_NR41, 0xFF);
-    save_byte(_NR42, 0x00);
-    save_byte(_NR43, 0x00);
-    save_byte(_NR44, 0xBF);
-    save_byte(_NR50, 0x77);
-    save_byte(_NR51, 0xF3);
-    save_byte(_NR52, 0xF1); 
-
-    // Video / PPU
-    save_byte(_LCDC, 0x91);
-    save_byte(_SCY,  0x00);
-    save_byte(_SCX,  0x00);
-    save_byte(_LYC,  0x00);
-    save_byte(_BGP,  0xFC);
-    save_byte(_OBP0, 0xFF);
-    save_byte(_OBP1, 0xFF);
-    save_byte(_WY,   0x00);
-    save_byte(_WX,   0x00);
-
-    // Interrupt Enable
-    save_byte(_IF,   0x00);
-    save_byte(_IE,   0x00);
-}
 
 void render_scanline(uint8_t ly) {
     uint8_t lcdc = memory->io[_LCDC - 0xFF00];
@@ -347,9 +298,10 @@ int save_byte(uint16_t address, uint8_t val){
         else if (address == _JOYP) memory->io[0] = val & 0x30;
         else if (address == _DMA) {
             uint16_t src = val << 8;
-            for (int i = 0; i < 0xA0; i++)
+            for (int i = 0; i < 0xA0; i++){
                 memory->oam[i] = read_byte(src + i);
-            update_timers(640);
+                update_timers(4);
+            }
         }
         else memory->io[address - 0xFF00] = val;
     } else if (address >= 0xFF80 && address <= 0xFFFE){
@@ -362,6 +314,59 @@ int save_byte(uint16_t address, uint8_t val){
     return 0;
 }
 
+void init_io_ports(void) {
+    // Input Default
+    save_byte(_JOYP, 0x30);
+
+    save_byte(_LY,   0x00);
+    save_byte(_STAT, 0x00);
+
+    // Timer Defaults
+    save_byte(_TIMA, 0x0);
+    save_byte(_TMA, 0x0);
+    save_byte(_TAC, 0x0);
+
+    // Audio Defaults (Channel 1)
+    save_byte(_NR10, 0x80);
+    save_byte(_NR11, 0xBF);
+    save_byte(_NR12, 0xF3);
+    save_byte(_NR14, 0xBF);
+    
+    // Audio Defaults (Channel 2)
+    save_byte(_NR21, 0x3F);
+    save_byte(_NR22, 0x0);
+    save_byte(_NR24, 0xBF);
+
+    // Audio Defaults (Channel 3)
+    save_byte(_NR30, 0x7F);
+    save_byte(_NR31, 0xFF);
+    save_byte(_NR32, 0x9F);
+    save_byte(_NR33, 0xBF);
+
+    // Audio Channel 4 & Master Controls
+    save_byte(_NR41, 0xFF);
+    save_byte(_NR42, 0x00);
+    save_byte(_NR43, 0x00);
+    save_byte(_NR44, 0xBF);
+    save_byte(_NR50, 0x77);
+    save_byte(_NR51, 0xF3);
+    save_byte(_NR52, 0xF1); 
+
+    // Video / PPU
+    save_byte(_LCDC, 0x91);
+    save_byte(_SCY,  0x00);
+    save_byte(_SCX,  0x00);
+    save_byte(_LYC,  0x00);
+    save_byte(_BGP,  0xFC);
+    save_byte(_OBP0, 0xFF);
+    save_byte(_OBP1, 0xFF);
+    save_byte(_WY,   0x00);
+    save_byte(_WX,   0x00);
+
+    // Interrupt Enable
+    save_byte(_IF,   0x00);
+    save_byte(_IE,   0x00);
+}
 
 void handle_interrupts() {
     uint8_t pending = memory->io[_IF - 0xFF00] & memory->ie & 0x1F;

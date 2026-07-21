@@ -121,12 +121,7 @@ typedef struct {
     uint16_t pc;
 } registers;
 
-static const uint32_t shades[4] = {
-    0xFFFFFF,  // white
-    0xAAAAAA,  // light gray
-    0x555555,  // dark gray
-    0x000000   // black
-};
+extern const uint32_t shades[4];
 
 GameBoyMemory *memory;
 registers *reg;
