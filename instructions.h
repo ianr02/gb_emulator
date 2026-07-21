@@ -164,7 +164,12 @@ void update_ppu(uint8_t cycles) {
 
     // Check LCD enable
     uint8_t lcdc = memory->io[_LCDC - 0xFF00];
-    if (!(lcdc & 0x80)) return;  
+    if (!(lcdc & 0x80)) {
+        memory->io[_LY - 0xFF00] = 0;
+        memory->io[_STAT - 0xFF00] &= 0xFC;
+        ppu_cycle = 0;
+        return;
+    }
 
     uint8_t ly = memory->io[_LY - 0xFF00];
     uint8_t lyc = memory->io[_LYC - 0xFF00];
@@ -179,16 +184,6 @@ void update_ppu(uint8_t cycles) {
             render_scanline(ly);
         ly++;
 
-        if (ly == lyc) {
-            if (!(stat & 0x04)) {
-                stat |= 0x04; // set ly == lyc
-                if (stat & 0x40)
-                    memory->io[_IF - 0xFF00] |= 0x02;  // STAT INT
-            }
-        } else {
-            stat &= ~0x04;
-        }
-
         if (ly == 144) {
             memory->io[_IF - 0xFF00] |= 0x01;       // VBlank INT
             stat = (stat & 0xFC) | 0x01;             // set mode 1
@@ -200,10 +195,21 @@ void update_ppu(uint8_t cycles) {
             stat = (stat & 0xFC) | 0x01;              // Stay in VBlank
         } else if (ly == 154) {
             ly = 0;
-            stat = (stat & 0xFC) | 0x02;              // set mode 2
+            stat = (stat & 0xFC) | 0x02;
         } else {
             stat = (stat & 0xFC) | 0x02;              //set mode 2
         }
+
+        if (ly == lyc) {
+            if (!(stat & 0x04)) {
+                stat |= 0x04; // set ly == lyc
+                if (stat & 0x40)
+                    memory->io[_IF - 0xFF00] |= 0x02;  // STAT INT
+            }
+        } else {
+            stat &= ~0x04;
+        }
+
         memory->io[_LY - 0xFF00] = ly;
     }
 
@@ -267,8 +273,10 @@ uint8_t read_byte(uint16_t address) {
     } else if (address >= 0xFF00 && address <= 0xFF7F){
         if (address == _JOYP) {
             uint8_t val = 0xC0 | (memory->io[0] & 0x30);
-            if (!(memory->io[0] & 0x10)) val |= joypad_dpad;  // d-pad column
-            if (!(memory->io[0] & 0x20)) val |= joypad_btn;   // button column
+            uint8_t both = 0x0F;
+            if (!(memory->io[0] & 0x10)) both &= joypad_dpad;
+            if (!(memory->io[0] & 0x20)) both &= joypad_btn;
+            val |= both;
             return val;
         }
         return memory->io[address - 0xFF00];
@@ -295,7 +303,15 @@ void save_byte(uint16_t address, uint8_t val){
         memory->oam[address - 0xFE00] = val;
     } else if (address >= 0xFF00 && address <= 0xFF7F){
         if (address == _DIV) internalClock = 0;
+        else if (address == _LY) return;
         else if (address == _JOYP) memory->io[0] = val & 0x30;
+        else if (address == _LCDC) {
+            memory->io[_LCDC - 0xFF00] = val;
+            if (!(val & 0x80)) {
+                memory->io[_LY - 0xFF00] = 0;
+                memory->io[_STAT - 0xFF00] &= 0xFC;  // mode 0
+            }
+        }
         else if (address == _DMA) {
             uint16_t src = val << 8;
             for (int i = 0; i < 0xA0; i++){
@@ -303,7 +319,10 @@ void save_byte(uint16_t address, uint8_t val){
                 update_timers(4);
             }
         }
-        else memory->io[address - 0xFF00] = val;
+        else if (address == _STAT)
+            memory->io[_STAT - 0xFF00] = (val & 0x78) | (memory->io[_STAT - 0xFF00] & 0x07);
+        else 
+            memory->io[address - 0xFF00] = val;
     } else if (address >= 0xFF80 && address <= 0xFFFE){
         memory->hram[address - 0xFF80] = val;
     } else if (address == 0xFFFF){
@@ -470,7 +489,10 @@ void PUSH_##reg_name() { \
 void POP_##reg_name() { \
     uint8_t low = read_byte(reg->sp++); \
     uint8_t high = read_byte(reg->sp++); \
-    reg->reg_name =  (high << 8) | low; \
+    uint16_t val = (high << 8) | low; \
+    if (reg->reg_name == reg->af) \
+        val &= 0xFFF0; \
+    reg->reg_name = val; \
     update_timers(12); \
 }
 
@@ -763,6 +785,13 @@ void RESET_##reg_name() { \
 
 void NOP(){
     update_timers(4);
+}
+
+void POP_af() {
+    uint8_t low = read_byte(reg->sp++);
+    uint8_t high = read_byte(reg->sp++);
+    reg->af = (high << 8) | (low & 0xF0);
+    update_timers(12);
 }
 
 // Put HL into Stack Pointer (SP)
@@ -1326,7 +1355,7 @@ void BIT_hl() {
 }
 
 // set bit n in [hl]
-void SET_hl() { \
+void SET_hl() { 
     uint8_t val = read_byte(reg->hl);
     uint8_t bit = (opcode >> 3) & 0x07; 
     uint8_t mask = 1 << bit;
@@ -1336,7 +1365,7 @@ void SET_hl() { \
 }
 
 // reset bit n in [hl]
-void RESET_hl() { \
+void RESET_hl() { 
     uint8_t val = read_byte(reg->hl);
     uint8_t bit = (opcode >> 3) & 0x07; 
     uint8_t mask = ~(1 << bit);
@@ -1474,6 +1503,7 @@ void CALL_COND() {
         if(reg->f & 0x10) {
             condition_met = true;
         }
+        break;
     }
     if(condition_met){
         save_byte(--reg->sp, (reg->pc >> 8) & 0xFF);
@@ -1759,7 +1789,6 @@ PUSH_REG16(bc);
 PUSH_REG16(de);
 PUSH_REG16(hl);
 
-POP_REG16(af);
 POP_REG16(bc);
 POP_REG16(de);
 POP_REG16(hl);
@@ -2195,7 +2224,7 @@ instruction_ptr prefix_opcode_table[256] = {
     // 0x2_ (Arithmetic Shifts)
     [0x20] = SL_b, // SLA B
     [0x21] = SL_c, // SLA C
-    [0x22] = SL_d, // SLA Dj
+    [0x22] = SL_d, // SLA D
     [0x23] = SL_e, // SLA E
     [0x24] = SL_h, // SLA H
     [0x25] = SL_l, // SLA L
