@@ -646,7 +646,7 @@ void DEC_##reg_name(){ \
 void SWAP_##reg_name() { \
     reg->f = 0x0; \
     if (reg->reg_name == 0x0) \
-        reg-> f = 0x80; \
+        reg->f = 0x80; \
     reg->reg_name = (reg->reg_name << 4) | (reg->reg_name >> 4); \
     update_timers(8); \
 }
@@ -772,10 +772,10 @@ void LD_sp_hl() {
 }
 
 // save n8 in [hl] (checked)
-void SV_hl_n() { \
-    uint8_t val = read_byte(reg->pc++); \
-    save_byte(reg->hl, val); \
-    update_timers(12); \
+void SV_hl_n() { 
+    uint8_t val = read_byte(reg->pc++); 
+    save_byte(reg->hl, val); 
+    update_timers(12); 
 }
 
 // Put value A into [nn]
@@ -1108,10 +1108,10 @@ void SWAP_hl() {
     uint8_t val = read_byte(reg->hl);
     reg->f = 0x0; 
     if (val == 0x0) 
-        reg-> f = 0x80; 
+        reg->f = 0x80; 
     val = (val << 4) | (val >> 4); 
     save_byte(reg->hl, val);
-    update_timers(16); \
+    update_timers(16); 
 }
 
 // Decimal adjust register A from binary to BCD. 
@@ -1432,7 +1432,7 @@ void JR_COND() {
         break;
     }
     if(condition_met){
-        reg->pc = (uint16_t) reg->pc + val;
+        reg->pc = (uint16_t)((int32_t)reg->pc + val);
         update_timers(12);
     } else {
         update_timers(8);
@@ -1489,6 +1489,8 @@ void CALL_COND() {
 void RST() {
     uint8_t offset = 0x0;
     switch (opcode){
+        case 0xC7:
+            break;
         case 0xCF:
             offset = 0x08;
             break;

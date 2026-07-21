@@ -16,7 +16,7 @@ int main(int argc, char *argv[]) {
         printf("Usage: %s <path_to_rom>\n", argv[0]);
         return 1;
     }
-    memory = calloc(GAMEBOY_MEMORY_SIZE, sizeof(uint8_t));
+    memory = calloc(1, sizeof(GameBoyMemory));
     reg = malloc(sizeof(registers));
     init_io_ports();
     reg->pc = INIT_PC;
@@ -73,12 +73,13 @@ int main(int argc, char *argv[]) {
         } else {
             exit(EXIT_FAILURE);
         }
+        
         if (ime_next >= 0) {
             if (ime_next == 0) {
                 ime = ei;            
                 ime_next = -1; // Reset tracker
-            }
-            ime_next--;
+            } else 
+                ime_next--;
         }
     }
     printf("exiting");
