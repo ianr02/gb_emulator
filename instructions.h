@@ -309,9 +309,8 @@ int save_byte(uint16_t address, uint8_t val){
     } else if (address == 0xFFFF){
         memory->ie = val;
     } else {
-        exit(EXIT_FAILURE);
+        return 0;
     }
-    return 0;
 }
 
 void init_io_ports(void) {
