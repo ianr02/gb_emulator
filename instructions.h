@@ -191,6 +191,7 @@ void update_ppu(uint8_t cycles) {
                 memory->io[_IF - 0xFF00] |= 0x02;    // STAT INT 
             SDL_RenderCopy(ppu_renderer, ppu_texture, NULL, NULL);
             SDL_RenderPresent(ppu_renderer);
+            printf("VBlank PC=0x%04X\n", reg->pc);
         } else if (ly >= 145 && ly <= 153) {
             stat = (stat & 0xFC) | 0x01;              // Stay in VBlank
         } else if (ly == 154) {

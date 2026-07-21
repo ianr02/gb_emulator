@@ -37,7 +37,7 @@ int main(int argc, char *argv[]) {
     SDL_Init(SDL_INIT_VIDEO);
     ppu_window   = SDL_CreateWindow("Game Boy", SDL_WINDOWPOS_CENTERED,
                                     SDL_WINDOWPOS_CENTERED, 160*4, 144*4, 0);
-    ppu_renderer = SDL_CreateRenderer(ppu_window, -1, SDL_RENDERER_ACCELERATED);
+    ppu_renderer = SDL_CreateRenderer(ppu_window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     ppu_texture  = SDL_CreateTexture(ppu_renderer, SDL_PIXELFORMAT_ARGB8888,
                                      SDL_TEXTUREACCESS_STREAMING, 160, 144);
     SDL_RenderSetLogicalSize(ppu_renderer, 160, 144);
@@ -66,7 +66,7 @@ int main(int argc, char *argv[]) {
             handle_interrupts();
         }
         opcode = read_byte(reg->pc);
-        // printf("PC: 0x%04X | Opcode: 0x%02X\n", reg->pc, opcode);
+        printf("PC: 0x%04X | Opcode: 0x%02X\n", reg->pc, opcode);
         ++reg->pc;
         if (opcode_table[opcode] != NULL) {
             opcode_table[opcode]();
