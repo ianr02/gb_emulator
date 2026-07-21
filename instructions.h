@@ -17,68 +17,6 @@ extern const uint32_t shades[4];
 
 void prefix_function();
 
-uint8_t read_byte(uint16_t address) {
-    if (address >= 0x0000 && address <= 0x7FFF) {
-        return memory->rom[address];
-    } else if (address >= 0x8000 && address <= 0x9FFF) {
-        return memory->vram[address - 0x8000];
-    } else if (address >= 0xA000 && address <= 0xBFFF) {
-        return memory->external[address - 0xA000];
-    } else if (address >= 0xC000 && address <= 0xDFFF) {
-        return memory->wram[address - 0xC000];
-    } else if (address >= 0xE000 && address <= 0xFDFF) {
-        return memory->wram[address - 0xE000];
-    } else if (address >= 0xFE00 && address <= 0xFE9F) {
-        return memory->oam[address - 0xFE00];
-    } else if (address >= 0xFF00 && address <= 0xFF7F){
-        if (address == _JOYP) {
-            uint8_t val = 0xC0 | (memory->io[0] & 0x30);
-            if (!(memory->io[0] & 0x10)) val |= joypad_dpad;  // d-pad column
-            if (!(memory->io[0] & 0x20)) val |= joypad_btn;   // button column
-            return val;
-        }
-        return memory->io[address - 0xFF00];
-    } else if (address >= 0xFF80 && address <= 0xFFFE){
-        return memory->hram[address - 0xFF80];
-    } else if (address == 0xFFFF){
-        return memory->ie;
-    }
-    return 0xFF;
-}
-
-int save_byte(uint16_t address, uint8_t val){
-    if (address >= 0x0000 && address <= 0x7FFF) {
-        memory->rom[address] = val;
-    } else if (address >= 0x8000 && address <= 0x9FFF) {
-        memory->vram[address - 0x8000] = val;
-    } else if (address >= 0xA000 && address <= 0xBFFF) {
-        memory->external[address - 0xA000] = val;
-    } else if (address >= 0xC000 && address <= 0xDFFF) {
-        memory->wram[address - 0xC000] = val;
-    } else if (address >= 0xE000 && address <= 0xFDFF) {
-        memory->wram[address - 0xE000] = val;
-    } else if (address >= 0xFE00 && address <= 0xFE9F) {
-        memory->oam[address - 0xFE00] = val;
-    } else if (address >= 0xFF00 && address <= 0xFF7F){
-        if (address == _DIV) internalClock = 0;
-        else if (address == _JOYP) memory->io[0] = val & 0x30;
-        else if (address == _DMA) {
-            uint16_t src = val << 8;
-            for (int i = 0; i < 0xA0; i++)
-                memory->oam[i] = read_byte(src + i);
-            update_timers(640);
-        }
-        else memory->io[address - 0xFF00] = val;
-    } else if (address >= 0xFF80 && address <= 0xFFFE){
-        memory->hram[address - 0xFF80] = val;
-    } else if (address == 0xFFFF){
-        memory->ie = val;
-    } else {
-        exit(EXIT_FAILURE);
-    }
-    return 0;
-}
-
 void init_io_ports(void) {
     // Input Default
     save_byte(_JOYP, 0x30);
@@ -361,6 +299,69 @@ void update_timers(uint8_t cycles) {
     update_ppu(cycles);
     memory->io[_DIV - 0xff00] = (internalClock >> 8) & 0xFF;
 }
+
+uint8_t read_byte(uint16_t address) {
+    if (address >= 0x0000 && address <= 0x7FFF) {
+        return memory->rom[address];
+    } else if (address >= 0x8000 && address <= 0x9FFF) {
+        return memory->vram[address - 0x8000];
+    } else if (address >= 0xA000 && address <= 0xBFFF) {
+        return memory->external[address - 0xA000];
+    } else if (address >= 0xC000 && address <= 0xDFFF) {
+        return memory->wram[address - 0xC000];
+    } else if (address >= 0xE000 && address <= 0xFDFF) {
+        return memory->wram[address - 0xE000];
+    } else if (address >= 0xFE00 && address <= 0xFE9F) {
+        return memory->oam[address - 0xFE00];
+    } else if (address >= 0xFF00 && address <= 0xFF7F){
+        if (address == _JOYP) {
+            uint8_t val = 0xC0 | (memory->io[0] & 0x30);
+            if (!(memory->io[0] & 0x10)) val |= joypad_dpad;  // d-pad column
+            if (!(memory->io[0] & 0x20)) val |= joypad_btn;   // button column
+            return val;
+        }
+        return memory->io[address - 0xFF00];
+    } else if (address >= 0xFF80 && address <= 0xFFFE){
+        return memory->hram[address - 0xFF80];
+    } else if (address == 0xFFFF){
+        return memory->ie;
+    }
+    return 0xFF;
+}
+
+int save_byte(uint16_t address, uint8_t val){
+    if (address >= 0x0000 && address <= 0x7FFF) {
+        memory->rom[address] = val;
+    } else if (address >= 0x8000 && address <= 0x9FFF) {
+        memory->vram[address - 0x8000] = val;
+    } else if (address >= 0xA000 && address <= 0xBFFF) {
+        memory->external[address - 0xA000] = val;
+    } else if (address >= 0xC000 && address <= 0xDFFF) {
+        memory->wram[address - 0xC000] = val;
+    } else if (address >= 0xE000 && address <= 0xFDFF) {
+        memory->wram[address - 0xE000] = val;
+    } else if (address >= 0xFE00 && address <= 0xFE9F) {
+        memory->oam[address - 0xFE00] = val;
+    } else if (address >= 0xFF00 && address <= 0xFF7F){
+        if (address == _DIV) internalClock = 0;
+        else if (address == _JOYP) memory->io[0] = val & 0x30;
+        else if (address == _DMA) {
+            uint16_t src = val << 8;
+            for (int i = 0; i < 0xA0; i++)
+                memory->oam[i] = read_byte(src + i);
+            update_timers(640);
+        }
+        else memory->io[address - 0xFF00] = val;
+    } else if (address >= 0xFF80 && address <= 0xFFFE){
+        memory->hram[address - 0xFF80] = val;
+    } else if (address == 0xFFFF){
+        memory->ie = val;
+    } else {
+        exit(EXIT_FAILURE);
+    }
+    return 0;
+}
+
 
 void handle_interrupts() {
     uint8_t pending = memory->io[_IF - 0xFF00] & memory->ie & 0x1F;
