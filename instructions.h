@@ -190,8 +190,8 @@ void update_ppu(uint8_t cycles) {
             if (stat & 0x10)
                 memory->io[_IF - 0xFF00] |= 0x02;    // STAT INT 
             SDL_RenderCopy(ppu_renderer, ppu_texture, NULL, NULL);
+            // printf("VBlank PC=0x%04X\n", reg->pc);
             SDL_RenderPresent(ppu_renderer);
-            printf("VBlank PC=0x%04X\n", reg->pc);
         } else if (ly >= 145 && ly <= 153) {
             stat = (stat & 0xFC) | 0x01;              // Stay in VBlank
         } else if (ly == 154) {
@@ -451,20 +451,6 @@ void LD_##reg_name##_nn() { \
 void SV_##reg_addr##_##reg_name() { \
     save_byte(reg->reg_addr, reg->reg_name); \
     update_timers(8); \
-}
-
-// load form value in reg2 + 0xFF00 ($FF00) into reg1
-#define GEN_LD_REG_REG(reg1, reg2) \
-void SLD_##reg1##_##reg2() { \
-    reg->reg1 = read_byte(0xFF00 |reg->reg2); \
-    update_timers(8); \
-}
-
-// save form value in reg1 into [reg2 + 0xFF00 ($FF00)]
-#define GEN_SV_REG_REG(reg1, reg2) \
-void SLD_##reg1##_##reg2() { \
-    save_byte(0xFF00 | reg->reg2, reg->reg1); \
-    update_timers(8);  \
 }
 
 // load inmediate 16 bit value into register of 16 bit (check)
@@ -783,9 +769,20 @@ void RESET_##reg_name() { \
     update_timers(8); \
 }
 
-
 void NOP(){
     update_timers(4);
+}
+
+// load from [0xFF00 + reg->c] in reg->a
+void LDH_a_c() { 
+    reg->a = read_byte(0xFF00 |reg->c); 
+    update_timers(8); 
+}
+
+// save value in reg->a into [0xFF00 + reg->c]
+void SLD_a_c() { 
+    save_byte(0xFF00 | reg->c, reg->a); 
+    update_timers(8);  
 }
 
 void POP_af() {
@@ -2151,7 +2148,7 @@ instruction_ptr opcode_table[256] = {
     // 0xE_
     [0xE0] = SVH_imm_a, // LDH (n), A
     [0xE1] = POP_hl, // POP HL
-    [0xE2] = SLD_c_a, // LDH (C), A
+    [0xE2] = SLD_a_c, // LDH (C), A
     [0xE3] = NULL, // XX (Invalid)
     [0xE4] = NULL, // XX (Invalid)
     [0xE5] = PUSH_hl, // PUSH HL
@@ -2169,7 +2166,7 @@ instruction_ptr opcode_table[256] = {
     // 0xF_
     [0xF0] = LDH_imm_a, // LDH A, (n)
     [0xF1] = POP_af , // POP AF
-    [0xF2] = SLD_a_c, // LDH A, [C] 
+    [0xF2] = LDH_a_c, // LDH A, [C] 
     [0xF3] = DI, // DI (Disable Interrupts)
     [0xF4] = NULL, // XX (Invalid)
     [0xF5] = PUSH_af, // PUSH AF
