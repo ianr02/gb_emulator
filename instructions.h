@@ -276,11 +276,11 @@ uint8_t read_byte(uint16_t address) {
         return memory->hram[address - 0xFF80];
     } else if (address == 0xFFFF){
         return memory->ie;
-    }
-    return 0xFF;
+    } else 
+        return 0xFF;
 }
 
-int save_byte(uint16_t address, uint8_t val){
+void save_byte(uint16_t address, uint8_t val){
     if (address >= 0x0000 && address <= 0x7FFF) {
         memory->rom[address] = val;
     } else if (address >= 0x8000 && address <= 0x9FFF) {
@@ -309,7 +309,7 @@ int save_byte(uint16_t address, uint8_t val){
     } else if (address == 0xFFFF){
         memory->ie = val;
     } else {
-        return 0;
+        return;
     }
 }
 
