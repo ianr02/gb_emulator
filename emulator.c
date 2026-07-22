@@ -60,6 +60,7 @@ int main(int argc, char *argv[]) {
                     case SDLK_RETURN:  joypad_btn  = pressed ? joypad_btn & ~8   : joypad_btn | 8;   break;  // Start
                     case SDLK_ESCAPE:  go = false; break;
                 }
+                if (pressed) memory->io[_IF - 0xFF00] |= 0x10;
             }
         }
         if (ime) {
