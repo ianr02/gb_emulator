@@ -290,6 +290,15 @@ uint8_t read_byte(uint16_t address) {
 }
 
 void save_byte(uint16_t address, uint8_t val){
+    if (address >= 0xC0A0 && address <= 0xC0A8) {
+        printf("WRAM 0x%04X=0x%02X from PC=0x%04X HL=0x%04X DE=0x%04X C=0x%02X\n",
+               address, val, reg->pc, reg->hl, reg->de, reg->c);
+    }
+    if (address >= 0xFFB5 && address <= 0xFFCE) {
+        printf("HRAM 0x%04X=0x%02X from PC=0x%04X HL=0x%04X DE=0x%04X A=0x%02X C=0x%02X\n",
+               address, val, reg->pc, reg->hl, reg->de, reg->a, reg->c);
+    }
+
     if (address >= 0x0000 && address <= 0x7FFF) {
         memory->rom[address] = val;
     } else if (address >= 0x8000 && address <= 0x9FFF) {
@@ -1795,9 +1804,6 @@ GEN_REG_n(bc);
 GEN_REG_n(de);
 
 GEN_REG_NN(a);
-
-GEN_LD_REG_REG(a, c);
-GEN_SV_REG_REG(c, a);
 
 GEN_LD_ADDR_R(hl, a);
 GEN_LD_ADDR_R(hl, b);

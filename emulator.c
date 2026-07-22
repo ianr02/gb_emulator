@@ -65,10 +65,7 @@ int main(int argc, char *argv[]) {
         if (ime) {
             handle_interrupts();
         }
-        if (reg->pc == 0x021B) printf("RESET at 0x021B SP=0x%04X\n", reg->sp);
-        if (reg->pc == 0x02ED) printf("VWAIT at 0x02ED\n");
-        if (reg->pc == 0x02D3) printf("CHECK at 0x02D3\n");
-        if (reg->pc >= 0xFF80 && reg->pc <= 0xFFFF) printf("HRAM PC=0x%04X\n", reg->pc);
+        if (reg->pc == 0xFFBB) printf("HRAM 0xFFBB=%02X 0xFFBC=%02X\n", read_byte(0xFFBB), read_byte(0xFFBC));
         opcode = read_byte(reg->pc);
         //printf("PC: 0x%04X | Opcode: 0x%02X\n", reg->pc, opcode);
         ++reg->pc;
