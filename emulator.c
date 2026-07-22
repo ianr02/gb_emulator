@@ -65,9 +65,9 @@ int main(int argc, char *argv[]) {
         if (ime) {
             handle_interrupts();
         }
-        if (reg->pc == 0xFFBB) printf("HRAM 0xFFBB=%02X 0xFFBC=%02X\n", read_byte(0xFFBB), read_byte(0xFFBC));
+        
+
         opcode = read_byte(reg->pc);
-        //printf("PC: 0x%04X | Opcode: 0x%02X\n", reg->pc, opcode);
         ++reg->pc;
         if (opcode_table[opcode] != NULL) {
             opcode_table[opcode]();

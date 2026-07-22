@@ -290,17 +290,8 @@ uint8_t read_byte(uint16_t address) {
 }
 
 void save_byte(uint16_t address, uint8_t val){
-    if (address >= 0xC0A0 && address <= 0xC0A8) {
-        printf("WRAM 0x%04X=0x%02X from PC=0x%04X HL=0x%04X DE=0x%04X C=0x%02X\n",
-               address, val, reg->pc, reg->hl, reg->de, reg->c);
-    }
-    if (address >= 0xFFB5 && address <= 0xFFCE) {
-        printf("HRAM 0x%04X=0x%02X from PC=0x%04X HL=0x%04X DE=0x%04X A=0x%02X C=0x%02X\n",
-               address, val, reg->pc, reg->hl, reg->de, reg->a, reg->c);
-    }
-
     if (address >= 0x0000 && address <= 0x7FFF) {
-        memory->rom[address] = val;
+        // Rom is write-only
     } else if (address >= 0x8000 && address <= 0x9FFF) {
         memory->vram[address - 0x8000] = val;
     } else if (address >= 0xA000 && address <= 0xBFFF) {
@@ -396,6 +387,9 @@ void init_io_ports(void) {
     save_byte(_IE,   0x00);
 }
 
+static uint16_t irq_sp_after_push = 0xFFFF;
+static int8_t active_irq = -1;
+
 void handle_interrupts() {
     uint8_t pending = memory->io[_IF - 0xFF00] & memory->ie & 0x1F;
     if (!pending) return;
@@ -420,7 +414,8 @@ void handle_interrupts() {
 // load inmediate value into register (checked)
 #define GEN_LD_N(reg_name) \
 void LD_##reg_name##_n() { \
-    reg->reg_name = read_byte(reg->pc++); \
+    uint8_t val = read_byte(reg->pc++); \
+    reg->reg_name = val; \
     update_timers(8); \
 } 
 
@@ -467,7 +462,7 @@ void SV_##reg_addr##_##reg_name() { \
 void LD_##reg_name##_nn() { \
     uint8_t low = read_byte(reg->pc++); \
     uint8_t high = read_byte(reg->pc++); \
-    uint16_t value = high << 8 | low; \
+    uint16_t value = (high << 8) | low; \
     reg->reg_name = value; \
     update_timers(12); \
 }
