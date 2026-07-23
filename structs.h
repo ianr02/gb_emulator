@@ -13,9 +13,9 @@
 #define GAMEBOY_MEMORY_SIZE (1 << 16) // 64KB
 #define INIT_PC 0x0100
 
-#define CART_ROM_ONLY               0x00
-#define CART_MBC1                   0x01 
-#define CART_MBC3                   0x0F
+#define CART_ROM_ONLY 0x00
+#define CART_MBC1     0x01 
+#define CART_MBC3     0x0F
 
 // OAM DMA transfer
 #define _DMA  0xFF46

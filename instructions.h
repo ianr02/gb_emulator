@@ -310,9 +310,10 @@ void save_byte(uint16_t address, uint8_t val){
                 break;
         }
     } else if (address >= 0x2000 && address <= 0x3FFF) {
+        uint8_t bank;
         switch (memory->cart_type) {
             case CART_MBC1: 
-                uint8_t bank = val & 0x1F;
+                bank = val & 0x1F;
                 if (bank == 0) bank = 1;
                 memory->rom_bank = (memory->rom_bank & 0xE0) | bank;
                 break;
