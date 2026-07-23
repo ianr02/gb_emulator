@@ -26,13 +26,20 @@ int main(int argc, char *argv[]) {
     reg->hl = 0x014D;
     reg->sp = 0xFFFE; 
 
-    FILE *file = fopen(argv[1], "rb");
-    if (!file) {
+    int fd = open(argv[1], O_RDONLY);
+    if (fd == -1) {
         printf("Error: Could not open ROM file %s\n", argv[1]);
         return 1;
     }
 
-    fread(memory->rom, 1, 0x8000, file);
+    struct stat st;
+    fstat(fd, &st);                        
+    memory->rom_size = st.st_size;
+    read(fd, memory->rom, memory->rom_size) ;
+
+    // Read cartridge type for MBC detection:
+    uint8_t cart_type = memory->rom[0x147];
+
 
     SDL_Init(SDL_INIT_VIDEO);
     ppu_window   = SDL_CreateWindow("Game Boy", SDL_WINDOWPOS_CENTERED,
@@ -60,7 +67,7 @@ int main(int argc, char *argv[]) {
                     case SDLK_RETURN:  joypad_btn  = pressed ? joypad_btn & ~8   : joypad_btn | 8;   break;  // Start
                     case SDLK_ESCAPE:  go = false; break;
                 }
-                if (pressed) memory->io[_IF - 0xFF00] |= 0x10;
+                if (pressed) memory->io[_IF - 0xFF00] |= 0x10; 
             }
         }
         if (ime) {
@@ -89,7 +96,7 @@ int main(int argc, char *argv[]) {
     SDL_DestroyRenderer(ppu_renderer);
     SDL_DestroyWindow(ppu_window);
     SDL_Quit();
-    fclose(file);
+    close(fd);
     free(memory);
     free(reg);
     exit(EXIT_SUCCESS);

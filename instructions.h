@@ -259,12 +259,14 @@ void update_timers(uint8_t cycles) {
 }
 
 uint8_t read_byte(uint16_t address) {
-    if (address >= 0x0000 && address <= 0x7FFF) {
+    if (address <= 0x3FFF) {
         return memory->rom[address];
+    } else if (address >= 0x4000 && address <= 0x7FFF) {
+        return memory->rom[(memory->rom_bank * 0x4000) + (address - 0x4000)];
     } else if (address >= 0x8000 && address <= 0x9FFF) {
         return memory->vram[address - 0x8000];
     } else if (address >= 0xA000 && address <= 0xBFFF) {
-        return memory->external[address - 0xA000];
+        return memory->external[(memory->ram_bank * 0x2000) + (address - 0xA000)];
     } else if (address >= 0xC000 && address <= 0xDFFF) {
         return memory->wram[address - 0xC000];
     } else if (address >= 0xE000 && address <= 0xFDFF) {
@@ -290,12 +292,24 @@ uint8_t read_byte(uint16_t address) {
 }
 
 void save_byte(uint16_t address, uint8_t val){
-    if (address >= 0x0000 && address <= 0x7FFF) {
-        // Rom is write-only
+    if (address <= 0x1FFF) {
+        memory->ram_enable = (val & 0x0F) == 0x0A;
+    } else if (address >= 0x2000 && address <= 0x3FFF) {
+        uint8_t bank = val & 0x1F;
+        if (bank == 0) bank = 1;
+        memory->rom_bank = (memory->rom_bank & 0xE0) | bank;
+    } else if (address <= 0x5FFF) {
+        if (memory->banking_mode == 0) 
+            memory->rom_bank = (memory->rom_bank & 0x1F) | ((val & 0x03) << 5);
+        else 
+            memory->ram_bank = val & 0x03;
+    } else if (address <= 0x7FFF) {
+        memory->banking_mode = val & 0x01;
     } else if (address >= 0x8000 && address <= 0x9FFF) {
         memory->vram[address - 0x8000] = val;
     } else if (address >= 0xA000 && address <= 0xBFFF) {
-        memory->external[address - 0xA000] = val;
+        if (memory->ram_enable) 
+            memory->external[(memory->ram_bank * 0x2000) + (address - 0xA000)] = val;
     } else if (address >= 0xC000 && address <= 0xDFFF) {
         memory->wram[address - 0xC000] = val;
     } else if (address >= 0xE000 && address <= 0xFDFF) {

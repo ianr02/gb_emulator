@@ -5,6 +5,9 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 #define GAMEBOY_MEMORY_SIZE (1 << 16) // 64KB
 #define INIT_PC 0x0100
@@ -70,14 +73,20 @@
 typedef void (*instruction_ptr)(void);
 
 typedef struct {
-    uint8_t rom[0x8000];    // 32KB Cartridge (Bank 0 and 1)
+    uint8_t rom[0x800000];    // 8MB Cartridge covers up to MBC5
     uint8_t vram[0x2000];   // 8KB Video RAM
-    uint8_t external[0x2000]; // 8KB External RAM (in the cartridge)
+    uint8_t external[0x8000]; // 32KB covers MBC1
     uint8_t wram[0x2000];   // 8KB Main/Work RAM
     uint8_t oam[0xA0];      // Sprite Attribute Table
     uint8_t io[0x80];       // I/O Registers (FF00-FF7F)
     uint8_t hram[0x7F];     // High RAM (FF80-FFFE)
     uint8_t ie;             // Interrupt Enable Register (FFFF)
+
+    size_t   rom_size;
+    uint8_t  rom_bank;       // current ROM bank (default 1)
+    uint8_t  ram_bank;       // current RAM bank (default 0)
+    bool     ram_enable;     // external RAM gate (default false)
+    uint8_t  banking_mode;   // 0=ROM mode, 1=RAM mode (default 0)
 } GameBoyMemory;
 
 typedef struct {
