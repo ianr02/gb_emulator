@@ -10,6 +10,9 @@ SDL_Texture  *ppu_texture;
 uint8_t opcode;
 uint8_t joypad_dpad = 0x0F; 
 uint8_t joypad_btn  = 0x0F; 
+char savepath[256];
+
+void exit_game();
 
 int main(int argc, char *argv[]) {
     if(argc < 2) {
@@ -35,7 +38,10 @@ int main(int argc, char *argv[]) {
     struct stat st;
     fstat(fd, &st);                        
     memory->rom_size = st.st_size;
-    read(fd, memory->rom, memory->rom_size) ;
+    if (read(fd, memory->rom, memory->rom_size) != memory->rom_size)  {
+        printf("Error: Could not load ROM file %s\n", argv[1]);
+        exit(EXIT_FAILURE);
+    }
 
     // Read cartridge type for MBC detection:
     uint8_t cart = memory->rom[0x0147];
@@ -52,9 +58,19 @@ int main(int argc, char *argv[]) {
     else 
         memory->cart_type = CART_ROM_ONLY;
 
-    
+    char title[17];
+    memcpy(title, &memory->rom[0x0134], 16);
+    title[16] = '\0';
 
-    SDL_Init(SDL_INIT_VIDEO);
+    snprintf(savepath, sizeof(savepath), ".saves/%s.sav", title);
+    int sf = open(savepath, O_RDONLY);
+    if (sf != -1) {
+        read(sf, memory->external, memory->rom[0x0149]); 
+        close(sf);
+    }
+
+
+    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
     ppu_window   = SDL_CreateWindow("Game Boy", SDL_WINDOWPOS_CENTERED,
                                     SDL_WINDOWPOS_CENTERED, 160*4, 144*4, 0);
     ppu_renderer = SDL_CreateRenderer(ppu_window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
@@ -105,12 +121,21 @@ int main(int argc, char *argv[]) {
         }
     }
     printf("exiting");
+    exit_game();
+    close(fd);
+    exit(EXIT_SUCCESS);
+}
+
+void exit_game (){
+    int sf = open(savepath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (sf != -1) {
+        write(sf, memory->external, memory->rom[0x0149]);
+        close(sf);
+    }
     SDL_DestroyTexture(ppu_texture);
     SDL_DestroyRenderer(ppu_renderer);
     SDL_DestroyWindow(ppu_window);
     SDL_Quit();
-    close(fd);
     free(memory);
     free(reg);
-    exit(EXIT_SUCCESS);
 }
