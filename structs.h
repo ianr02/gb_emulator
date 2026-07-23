@@ -15,6 +15,7 @@
 
 #define CART_ROM_ONLY 0x00
 #define CART_MBC1     0x01 
+#define CART_MBC2     0x05 
 #define CART_MBC3     0x0F
 
 // OAM DMA transfer

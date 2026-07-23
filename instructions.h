@@ -283,8 +283,12 @@ uint8_t read_byte(uint16_t address) {
                 if (memory->ram_bank >= 0x08 && memory->ram_bank <= 0x0C) {
                     if (memory->ram_enable)
                         return memory->rtc_regs[memory->ram_bank - 0x08];
-                    return 0xFF;
                 }
+                return 0xFF;
+            case CART_MBC2:
+                if (address <= 0xA1FF)
+                    return memory->external[address - 0xA000] | 0xF0;
+                return 0xFF;
             default:
                 return memory->external[(memory->ram_bank * 0x2000) + (address - 0xA000)];
         }
@@ -313,28 +317,41 @@ uint8_t read_byte(uint16_t address) {
 }
 
 void save_byte(uint16_t address, uint8_t val){
-    if (address <= 0x1FFF) {
-        switch (memory->cart_type) {
-            case CART_ROM_ONLY:
-                break;
-            default: 
-                memory->ram_enable = (val & 0x0F) == 0x0A;
-                break;
-        }
-    } else if (address >= 0x2000 && address <= 0x3FFF) {
-        uint8_t bank;
-        switch (memory->cart_type) {
-            case CART_MBC1: 
-                bank = val & 0x1F;
+    if (address <= 0x3FFF) {
+        if (memory->cart_type == CART_MBC2) {
+            if (address & 0x0100) {
+                uint8_t bank = val & 0x0F;
                 if (bank == 0) bank = 1;
-                memory->rom_bank = (memory->rom_bank & 0xE0) | bank;
-                break;
-            case CART_MBC3: 
-                memory->rom_bank = val & 0x7F;
-                break;
-            default: break;
+                memory->rom_bank = bank;
+            } else {
+                memory->ram_enable = (val & 0x0F) == 0x0A;
+            }
+            return;
+        } else {
+            if (address <= 0x1FFF) {
+                switch (memory->cart_type) {
+                    case CART_ROM_ONLY:
+                        break;
+                    default: 
+                        memory->ram_enable = (val & 0x0F) == 0x0A;
+                        break;
+                }
+            } else {
+                uint8_t bank;
+                switch (memory->cart_type) {
+                    case CART_MBC1: 
+                        bank = val & 0x1F;
+                        if (bank == 0) bank = 1;
+                        memory->rom_bank = (memory->rom_bank & 0xE0) | bank;
+                        break;
+                    case CART_MBC3: 
+                        memory->rom_bank = val & 0x7F;
+                        break;
+                    default: break;
+                }
+            }
         }
-    } else if (address <= 0x5FFF) {
+    } else if (address >= 0x4000 && address <= 0x5FFF) {
          switch (memory->cart_type) {
             case CART_MBC1:
                 if (memory->banking_mode == 0)
@@ -347,7 +364,7 @@ void save_byte(uint16_t address, uint8_t val){
                 break;
             default: break;
         }
-    } else if (address <= 0x7FFF) {
+    } else if (address >= 0x6000 && address <= 0x7FFF) {
         switch (memory->cart_type) {
             case CART_MBC1: 
                 memory->banking_mode = val & 0x01;
@@ -376,6 +393,10 @@ void save_byte(uint16_t address, uint8_t val){
         if (memory->ram_enable) {
             switch (memory->cart_type) {
                 case CART_ROM_ONLY:
+                    break;
+                case CART_MBC2:
+                    if (address <= 0xA1FF)
+                        memory->external[address - 0xA000] = val & 0x0F;
                     break;
                 default:
                     if (memory->ram_bank <= 0x03)

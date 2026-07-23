@@ -42,6 +42,9 @@ int main(int argc, char *argv[]) {
     if(cart >= 0x01 && cart <= 0x03) {
         memory->cart_type = CART_MBC1;
         memory->rom_bank = 1;
+    } else if (cart == 0x05 || cart == 0x06){
+        memory->cart_type = CART_MBC2;
+        memory->rom_bank = 1;
     } else if(cart >= 0x0F && cart <= 0x13)
         memory->cart_type = CART_MBC3;
     else 
