@@ -17,6 +17,7 @@
 #define CART_MBC1     0x01 
 #define CART_MBC2     0x05 
 #define CART_MBC3     0x0F
+#define CART_MBC5     0x19
 
 // OAM DMA transfer
 #define _DMA  0xFF46
@@ -81,7 +82,7 @@ typedef void (*instruction_ptr)(void);
 typedef struct __attribute__((packed)){
     uint8_t rom[0x800000];    // 8MB Cartridge covers up to MBC5
     uint8_t vram[0x2000];   // 8KB Video RAM
-    uint8_t external[0x8000]; // 32KB covers MBC1
+    uint8_t external[0x20000]; // 128KB covers MBC5
     uint8_t wram[0x2000];   // 8KB Main/Work RAM
     uint8_t oam[0xA0];      // Sprite Attribute Table
     uint8_t io[0x80];       // I/O Registers (FF00-FF7F)
@@ -90,7 +91,7 @@ typedef struct __attribute__((packed)){
 
     size_t   rom_size;
     uint8_t  cart_type;
-    uint8_t  rom_bank;       // current ROM bank (default 1)
+    uint16_t rom_bank;      // current ROM bank (default 1)
     uint8_t  ram_bank;       // current RAM bank (default 0)
     uint8_t  banking_mode;   // 0=ROM mode, 1=RAM mode (default 0)
     bool     ram_enable;     // external RAM gate (default false)

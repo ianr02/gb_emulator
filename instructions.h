@@ -326,7 +326,6 @@ void save_byte(uint16_t address, uint8_t val){
             } else {
                 memory->ram_enable = (val & 0x0F) == 0x0A;
             }
-            return;
         } else {
             if (address <= 0x1FFF) {
                 switch (memory->cart_type) {
@@ -347,10 +346,17 @@ void save_byte(uint16_t address, uint8_t val){
                     case CART_MBC3: 
                         memory->rom_bank = val & 0x7F;
                         break;
+                    case CART_MBC5:
+                        if (address <= 0x2FFF)
+                            memory->rom_bank = (memory->rom_bank & 0x100) | val;
+                        else
+                            memory->rom_bank = (memory->rom_bank & 0xFF) | ((val & 0x01) << 8);
+                        break;
                     default: break;
                 }
             }
         }
+        return;
     } else if (address >= 0x4000 && address <= 0x5FFF) {
          switch (memory->cart_type) {
             case CART_MBC1:
@@ -361,6 +367,9 @@ void save_byte(uint16_t address, uint8_t val){
                 break;
             case CART_MBC3:
                 memory->ram_bank = val & 0x0F;  // 0x00-0x03 = RAM, 0x08-0x0C = RTC
+                break;
+            case CART_MBC5:
+                memory->ram_bank = val & 0x03;
                 break;
             default: break;
         }
