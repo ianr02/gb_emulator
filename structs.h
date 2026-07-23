@@ -8,9 +8,14 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <time.h>
 
 #define GAMEBOY_MEMORY_SIZE (1 << 16) // 64KB
 #define INIT_PC 0x0100
+
+#define CART_ROM_ONLY               0x00
+#define CART_MBC1                   0x01 
+#define CART_MBC3                   0x0F
 
 // OAM DMA transfer
 #define _DMA  0xFF46
@@ -72,7 +77,7 @@
 
 typedef void (*instruction_ptr)(void);
 
-typedef struct {
+typedef struct __attribute__((packed)){
     uint8_t rom[0x800000];    // 8MB Cartridge covers up to MBC5
     uint8_t vram[0x2000];   // 8KB Video RAM
     uint8_t external[0x8000]; // 32KB covers MBC1
@@ -83,10 +88,14 @@ typedef struct {
     uint8_t ie;             // Interrupt Enable Register (FFFF)
 
     size_t   rom_size;
+    uint8_t  cart_type;
     uint8_t  rom_bank;       // current ROM bank (default 1)
     uint8_t  ram_bank;       // current RAM bank (default 0)
-    bool     ram_enable;     // external RAM gate (default false)
     uint8_t  banking_mode;   // 0=ROM mode, 1=RAM mode (default 0)
+    bool     ram_enable;     // external RAM gate (default false)
+
+    uint8_t  rtc_regs[5];    // seconds, minutes, hours, day_low, day_high
+    uint8_t  rtc_latch_state; // 0 = waiting for 0x00, 1 = waiting for 0x01
 } GameBoyMemory;
 
 typedef struct {
