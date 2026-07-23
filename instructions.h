@@ -279,16 +279,18 @@ uint8_t read_byte(uint16_t address) {
         return memory->vram[address - 0x8000];
     } else if (address >= 0xA000 && address <= 0xBFFF) {
         switch (memory->cart_type) {
-            case CART_MBC3:
-                if (memory->ram_bank >= 0x08 && memory->ram_bank <= 0x0C) {
-                    if (memory->ram_enable)
-                        return memory->rtc_regs[memory->ram_bank - 0x08];
-                }
-                return 0xFF;
             case CART_MBC2:
                 if (address <= 0xA1FF)
                     return memory->external[address - 0xA000] | 0xF0;
                 return 0xFF;
+                
+            case CART_MBC3:
+                if (memory->ram_bank >= 0x08 && memory->ram_bank <= 0x0C) {
+                    if (memory->ram_enable)
+                        return memory->rtc_regs[memory->ram_bank - 0x08];
+                    return 0xFF;
+                }
+
             default:
                 return memory->external[(memory->ram_bank * 0x2000) + (address - 0xA000)];
         }
