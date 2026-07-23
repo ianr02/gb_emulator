@@ -202,13 +202,14 @@ void update_ppu(uint8_t cycles) {
             if (stat & 0x10)
                 memory->io[_IF - 0xFF00] |= 0x02;    // STAT INT 
             SDL_RenderCopy(ppu_renderer, ppu_texture, NULL, NULL);
-            // printf("VBlank PC=0x%04X\n", reg->pc);
             SDL_RenderPresent(ppu_renderer);
         } else if (ly >= 145 && ly <= 153) {
             stat = (stat & 0xFC) | 0x01;              // Stay in VBlank
         } else if (ly == 154) {
             ly = 0;
             stat = (stat & 0xFC) | 0x02;
+            if (stat & 0x20)
+                memory->io[_IF - 0xFF00] |= 0x02;
         } else {
             stat = (stat & 0xFC) | 0x02;              //set mode 2
         }
@@ -283,7 +284,7 @@ uint8_t read_byte(uint16_t address) {
                 if (address <= 0xA1FF)
                     return memory->external[address - 0xA000] | 0xF0;
                 return 0xFF;
-                
+
             case CART_MBC3:
                 if (memory->ram_bank >= 0x08 && memory->ram_bank <= 0x0C) {
                     if (memory->ram_enable)
@@ -506,9 +507,6 @@ void init_io_ports(void) {
     save_byte(_IF,   0x00);
     save_byte(_IE,   0x00);
 }
-
-static uint16_t irq_sp_after_push = 0xFFFF;
-static int8_t active_irq = -1;
 
 void handle_interrupts() {
     uint8_t pending = memory->io[_IF - 0xFF00] & memory->ie & 0x1F;
