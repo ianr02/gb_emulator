@@ -120,6 +120,18 @@ void render_scanline(uint8_t ly) {
         }
 
         for (int i = 0; i < count; i++) {
+            for (int j = i + 1; j < count; j++) {
+                int xi = memory->oam[visible[i] * 4 + 1] - 8;
+                int xj = memory->oam[visible[j] * 4 + 1] - 8;
+                if (xj < xi) {
+                    uint8_t tmp = visible[i];
+                    visible[i] = visible[j];
+                    visible[j] = tmp;
+                }
+            }
+        }
+
+        for (int i = 0; i < count; i++) {
             int idx = visible[i];
             int sprite_y = memory->oam[idx * 4] - 16;
             int sprite_x = memory->oam[idx * 4 + 1] - 8;
