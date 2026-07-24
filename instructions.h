@@ -123,7 +123,7 @@ void render_scanline(uint8_t ly) {
             for (int j = i + 1; j < count; j++) {
                 int xi = memory->oam[visible[i] * 4 + 1] - 8;
                 int xj = memory->oam[visible[j] * 4 + 1] - 8;
-                if (xj < xi) {
+                if (xj > xi) {
                     uint8_t tmp = visible[i];
                     visible[i] = visible[j];
                     visible[j] = tmp;
@@ -196,6 +196,16 @@ void update_ppu(uint8_t cycles) {
             render_scanline(ly);
         ly++;
 
+        if (ly == lyc) {
+            if (!(stat & 0x04)) {
+                stat |= 0x04; // set ly == lyc
+                if (stat & 0x40)
+                    memory->io[_IF - 0xFF00] |= 0x02;  // STAT INT
+            }
+        } else {
+            stat &= ~0x04;
+        }
+
         if (ly == 144) {
             memory->io[_IF - 0xFF00] |= 0x01;       // VBlank INT
             stat = (stat & 0xFC) | 0x01;             // set mode 1
@@ -212,16 +222,6 @@ void update_ppu(uint8_t cycles) {
                 memory->io[_IF - 0xFF00] |= 0x02;
         } else {
             stat = (stat & 0xFC) | 0x02;              //set mode 2
-        }
-
-        if (ly == lyc) {
-            if (!(stat & 0x04)) {
-                stat |= 0x04; // set ly == lyc
-                if (stat & 0x40)
-                    memory->io[_IF - 0xFF00] |= 0x02;  // STAT INT
-            }
-        } else {
-            stat &= ~0x04;
         }
 
         memory->io[_LY - 0xFF00] = ly;
@@ -272,11 +272,15 @@ void update_timers(uint8_t cycles) {
 }
 
 uint8_t read_byte(uint16_t address) {
+    if (dma_active && (address < 0xFF80 || address > 0xFFFE))
+        return 0xFF;
+
     if (address <= 0x3FFF) {
         return memory->rom[address];
     } else if (address >= 0x4000 && address <= 0x7FFF) {
         return memory->rom[(memory->rom_bank * 0x4000) + (address - 0x4000)];
     } else if (address >= 0x8000 && address <= 0x9FFF) {
+        if ((memory->io[_STAT - 0xFF00] & 0x03) == 3) return 0xFF;
         return memory->vram[address - 0x8000];
     } else if (address >= 0xA000 && address <= 0xBFFF) {
         switch (memory->cart_type) {
@@ -300,6 +304,7 @@ uint8_t read_byte(uint16_t address) {
     } else if (address >= 0xE000 && address <= 0xFDFF) {
         return memory->wram[address - 0xE000];
     } else if (address >= 0xFE00 && address <= 0xFE9F) {
+        if ((memory->io[_STAT - 0xFF00] & 0x03) == 2) return 0xFF;
         return memory->oam[address - 0xFE00];
     } else if (address >= 0xFF00 && address <= 0xFF7F){
         if (address == _JOYP) {
@@ -320,6 +325,9 @@ uint8_t read_byte(uint16_t address) {
 }
 
 void save_byte(uint16_t address, uint8_t val){
+    if (dma_active && (address < 0xFF80 || address > 0xFFFE))
+        return;
+
     if (address <= 0x3FFF) {
         if (memory->cart_type == CART_MBC2) {
             if (address & 0x0100) {
@@ -400,7 +408,8 @@ void save_byte(uint16_t address, uint8_t val){
             default: break;
         }
     } else if (address >= 0x8000 && address <= 0x9FFF) {
-        memory->vram[address - 0x8000] = val;
+        if ((memory->io[_STAT - 0xFF00] & 0x03) != 3)
+            memory->vram[address - 0x8000] = val;
     } else if (address >= 0xA000 && address <= 0xBFFF) {
         if (memory->ram_enable) {
             switch (memory->cart_type) {
@@ -422,7 +431,8 @@ void save_byte(uint16_t address, uint8_t val){
     } else if (address >= 0xE000 && address <= 0xFDFF) {
         memory->wram[address - 0xE000] = val;
     } else if (address >= 0xFE00 && address <= 0xFE9F) {
-        memory->oam[address - 0xFE00] = val;
+        if ((memory->io[_STAT - 0xFF00] & 0x03) != 2)
+                memory->oam[address - 0xFE00] = val;
     } else if (address >= 0xFF00 && address <= 0xFF7F){
         if (address == _DIV) internalClock = 0;
         else if (address == _LY) return;
@@ -436,10 +446,15 @@ void save_byte(uint16_t address, uint8_t val){
         }
         else if (address == _DMA) {
             uint16_t src = val << 8;
+            dma_active = true;
             for (int i = 0; i < 0xA0; i++){
-                memory->oam[i] = read_byte(src + i);
+                dma_active = false;
+                uint8_t data = read_byte(src + i);
+                dma_active = true;
+                memory->oam[i] = data;
                 update_timers(4);
             }
+            dma_active = false;
         }
         else if (address == _STAT)
             memory->io[_STAT - 0xFF00] = (val & 0x78) | (memory->io[_STAT - 0xFF00] & 0x07);
@@ -556,16 +571,6 @@ void LD_##r1##_##r2() { \
 void LD_a_##reg_name() { \
     reg->a = read_byte(reg->reg_name); \
     update_timers(8); \
-}
-
-// load value from memory in [nn], 16 bit value, into register
-#define GEN_REG_NN(reg_name) \
-void LD_##reg_name##_nn() { \
-    uint8_t low = read_byte(reg->pc ++); \
-    uint8_t high = read_byte(reg->pc ++); \
-    uint16_t address = (high << 8) | low; \
-    reg->reg_name = read_byte(address); \
-    update_timers(16); \
 }
 
 // save value from register into memory in [register] (checked)
@@ -893,6 +898,15 @@ void RESET_##reg_name() { \
 
 void NOP(){
     update_timers(4);
+}
+
+// load value from memory in [nn], 16 bit value, into register A
+void LD_a_nn() { 
+    uint8_t low = read_byte(reg->pc ++); 
+    uint8_t high = read_byte(reg->pc ++); 
+    uint16_t address = (high << 8) | low; 
+    reg->a = read_byte(address); 
+    update_timers(16); 
 }
 
 // load from [0xFF00 + reg->c] in reg->a
@@ -1915,8 +1929,6 @@ POP_REG16(hl);
 
 GEN_REG_n(bc);
 GEN_REG_n(de);
-
-GEN_REG_NN(a);
 
 GEN_LD_ADDR_R(hl, a);
 GEN_LD_ADDR_R(hl, b);

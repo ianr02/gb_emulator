@@ -58,6 +58,7 @@ int main(int argc, char *argv[]) {
         memory->cart_type = CART_MBC5;
     else 
         memory->cart_type = CART_ROM_ONLY;
+        memory->rom_bank = 1;
 
     char title[17];
     memcpy(title, &memory->rom[0x0134], 16);
@@ -126,7 +127,8 @@ int main(int argc, char *argv[]) {
         if (ime) {
             handle_interrupts();
         }
-        
+        // printf("PC: %04X  OPCODE: %02X  SP: %04X  A: %02X\n")
+        // reg->pc, memory->rom[reg->pc], reg->sp, reg->a);
         opcode = read_byte(reg->pc);
         ++reg->pc;
         if (opcode_table[opcode] != NULL) {
@@ -143,8 +145,7 @@ int main(int argc, char *argv[]) {
                 ime_next--;
         }
     }
-    printf("exiting");
-    exit_game();
+    // exit_game();
     close(fd);
     exit(EXIT_SUCCESS);
 }

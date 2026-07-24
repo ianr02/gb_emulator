@@ -153,5 +153,6 @@ int8_t ime_next = -1;
 bool ei = false, ime = false;
 
 bool prefix_flag = false;
+bool dma_active = false;
 
 #endif
