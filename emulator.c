@@ -11,6 +11,7 @@ uint8_t opcode;
 uint8_t joypad_dpad = 0x0F; 
 uint8_t joypad_btn  = 0x0F; 
 char savepath[256];
+size_t save_size;
 
 void exit_game();
 
@@ -62,10 +63,20 @@ int main(int argc, char *argv[]) {
     memcpy(title, &memory->rom[0x0134], 16);
     title[16] = '\0';
 
+    switch (memory->rom[0x0149]) {
+        case 1: save_size = 0x800;   break;   // 2KB
+        case 2: save_size = 0x2000;  break;   // 8KB
+        case 3: save_size = 0x8000;  break;   // 32KB
+        case 4: save_size = 0x20000; break;   // 128KB 
+        case 5: save_size = 0x10000; break;   // 64KB
+        default: save_size = 0;
+    }
+    if (memory->cart_type == CART_MBC2) save_size = 256;
+
     snprintf(savepath, sizeof(savepath), ".saves/%s.sav", title);
     int sf = open(savepath, O_RDONLY);
     if (sf != -1) {
-        read(sf, memory->external, memory->rom[0x0149]); 
+        read(sf, memory->external, save_size); 
         close(sf);
     }
 
@@ -103,7 +114,6 @@ int main(int argc, char *argv[]) {
             handle_interrupts();
         }
         
-
         opcode = read_byte(reg->pc);
         ++reg->pc;
         if (opcode_table[opcode] != NULL) {
@@ -129,7 +139,7 @@ int main(int argc, char *argv[]) {
 void exit_game (){
     int sf = open(savepath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (sf != -1) {
-        write(sf, memory->external, memory->rom[0x0149]);
+        write(sf, memory->external, save_size);
         close(sf);
     }
     SDL_DestroyTexture(ppu_texture);
