@@ -73,10 +73,23 @@ int main(int argc, char *argv[]) {
     }
     if (memory->cart_type == CART_MBC2) save_size = 256;
 
+    if (mkdir(".saves", 0755) != 0 && errno != EEXIST) {
+        perror("mkdir");
+        exit(EXIT_FAILURE);
+    }
+
     snprintf(savepath, sizeof(savepath), ".saves/%s.sav", title);
     int sf = open(savepath, O_RDONLY);
     if (sf != -1) {
-        read(sf, memory->external, save_size); 
+        read(sf, memory->external, save_size);
+        if (memory->cart_type == CART_MBC3) {
+            struct stat sav_st;
+            fstat(sf, &sav_st);
+            if (sav_st.st_size >= (off_t)(save_size + 5)) {
+                lseek(sf, save_size, SEEK_SET);
+                read(sf, memory->rtc_regs, 5);
+            }
+        }
         close(sf);
     }
 
@@ -140,8 +153,10 @@ void exit_game (){
     int sf = open(savepath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (sf != -1) {
         write(sf, memory->external, save_size);
+        if (memory->cart_type == CART_MBC3)
+            write(sf, memory->rtc_regs, 5);
         close(sf);
-    }
+    } 
     SDL_DestroyTexture(ppu_texture);
     SDL_DestroyRenderer(ppu_renderer);
     SDL_DestroyWindow(ppu_window);

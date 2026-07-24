@@ -1335,7 +1335,6 @@ void HALT() {
         while (!(memory->io[_IF - 0xFF00] & memory->ie))
             update_timers(4);
     } else {
-        --reg->pc;
         update_timers(4);
     }
 }

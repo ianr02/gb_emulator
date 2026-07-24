@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <dirent.h>
+#include <errno.h>
 
 #define GAMEBOY_MEMORY_SIZE (1 << 16) // 64KB
 #define INIT_PC 0x0100
