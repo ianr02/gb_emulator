@@ -123,7 +123,7 @@ void render_scanline(uint8_t ly) {
             for (int j = i + 1; j < count; j++) {
                 int xi = memory->oam[visible[i] * 4 + 1] - 8;
                 int xj = memory->oam[visible[j] * 4 + 1] - 8;
-                if (xj > xi) {
+                if (xj < xi) {
                     uint8_t tmp = visible[i];
                     visible[i] = visible[j];
                     visible[j] = tmp;
@@ -296,8 +296,12 @@ uint8_t read_byte(uint16_t address) {
                     return 0xFF;
                 }
 
-            default:
-                return memory->external[(memory->ram_bank * 0x2000) + (address - 0xA000)];
+            default: {
+                size_t idx = (memory->ram_bank * 0x2000) + (address - 0xA000);
+                if (idx < sizeof(memory->external))
+                    return memory->external[idx];
+                return 0xFF;
+            }
         }
     } else if (address >= 0xC000 && address <= 0xDFFF) {
         return memory->wram[address - 0xC000];
@@ -380,7 +384,7 @@ void save_byte(uint16_t address, uint8_t val){
                 memory->ram_bank = val & 0x0F;  // 0x00-0x03 = RAM, 0x08-0x0C = RTC
                 break;
             case CART_MBC5:
-                memory->ram_bank = val & 0x03;
+                memory->ram_bank = val & 0x0F;
                 break;
             default: break;
         }
@@ -420,10 +424,13 @@ void save_byte(uint16_t address, uint8_t val){
                         memory->external[address - 0xA000] = val & 0x0F;
                     break;
                 default:
-                    if (memory->ram_bank <= 0x03)
-                        memory->external[(memory->ram_bank * 0x2000) + (address - 0xA000)] = val;
-                    else if (memory->ram_bank >= 0x08 && memory->ram_bank <= 0x0C)
+                    if (memory->ram_bank >= 0x08 && memory->ram_bank <= 0x0C) {
                         memory->rtc_regs[memory->ram_bank - 0x08] = val;
+                    } else {
+                        size_t idx = (memory->ram_bank * 0x2000) + (address - 0xA000);
+                        if (idx < sizeof(memory->external))
+                            memory->external[idx] = val;
+                    }
             }
         }
     } else if (address >= 0xC000 && address <= 0xDFFF) {

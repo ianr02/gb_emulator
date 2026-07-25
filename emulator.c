@@ -56,9 +56,10 @@ int main(int argc, char *argv[]) {
         memory->cart_type = CART_MBC3;
     else if (cart >= 0x19 && cart <= 0x1E) 
         memory->cart_type = CART_MBC5;
-    else 
+    else {
         memory->cart_type = CART_ROM_ONLY;
         memory->rom_bank = 1;
+    }
 
     char title[17];
     memcpy(title, &memory->rom[0x0134], 16);
