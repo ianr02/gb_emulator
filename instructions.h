@@ -415,7 +415,7 @@ void save_byte(uint16_t address, uint8_t val){
         }
     } else if (address >= 0x8000 && address <= 0x9FFF) {
         if ((memory->io[_STAT - 0xFF00] & 0x03) != 3)
-            memory->vram[address - 0x8000] = val;
+          memory->vram[address - 0x8000] = val;
     } else if (address >= 0xA000 && address <= 0xBFFF) {
         if (memory->ram_enable) {
             switch (memory->cart_type) {

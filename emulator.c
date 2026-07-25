@@ -146,7 +146,7 @@ int main(int argc, char *argv[]) {
                 ime_next--;
         }
     }
-    // exit_game();
+    exit_game();
     close(fd);
     exit(EXIT_SUCCESS);
 }
