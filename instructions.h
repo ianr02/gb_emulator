@@ -252,7 +252,7 @@ void update_timers(uint8_t cycles) {
         internalClock++;
         // Check for overflow if timer is enabled
         if (tac & 0x04) {
-            static const uint8_t bitPos[] = {9, 3, 5, 7}; 
+            static const uint8_t bitPos[] = {10, 4, 6, 8};
             uint8_t bit = bitPos[tac & 0x03];  
             int oldBit = (oldClock >> bit) & 1;
             int newBit = (internalClock >> bit) & 1;
@@ -318,8 +318,10 @@ uint8_t read_byte(uint16_t address) {
             if (!(memory->io[0] & 0x20)) both &= joypad_btn;
             val |= both;
             return val;
-        }
-        return memory->io[address - 0xFF00];
+        } else if (address == _NR52)
+            return memory->io[_NR52 - 0xFF00] & 0xF0;
+        else 
+            return memory->io[address - 0xFF00];
     } else if (address >= 0xFF80 && address <= 0xFFFE){
         return memory->hram[address - 0xFF80];
     } else if (address == 0xFFFF){
@@ -444,6 +446,7 @@ void save_byte(uint16_t address, uint8_t val){
         if (address == _DIV) internalClock = 0;
         else if (address == _LY) return;
         else if (address == _JOYP) memory->io[0] = val & 0x30;
+        else if (address == _NR52) memory->io[_NR52 - 0xFF00] = val & 0xF0;
         else if (address == _LCDC) {
             memory->io[_LCDC - 0xFF00] = val;
             if (!(val & 0x80)) {
@@ -1355,7 +1358,7 @@ void HALT() {
     } else if (!(memory->io[_IF - 0xFF00] & memory->ie)){
         while (!(memory->io[_IF - 0xFF00] & memory->ie))
             update_timers(4);
-    } else {
+    }  else {
         update_timers(4);
     }
 }
