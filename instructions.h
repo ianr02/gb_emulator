@@ -136,7 +136,7 @@ void render_scanline(uint8_t ly) {
             for (int j = i + 1; j < count; j++) {
                 int xi = memory->oam[visible[i] * 4 + 1] - 8;
                 int xj = memory->oam[visible[j] * 4 + 1] - 8;
-                if (xj > xi || (xj == xi && visible[j] > visible[i])) {
+                if (xj < xi || (xj == xi && visible[j] < visible[i])) {
                     uint8_t tmp = visible[i];
                     visible[i] = visible[j];
                     visible[j] = tmp;
@@ -150,8 +150,6 @@ void render_scanline(uint8_t ly) {
             int sprite_x = memory->oam[idx * 4 + 1] - 8;
             uint8_t tile = memory->oam[idx * 4 + 2];
             uint8_t flags = memory->oam[idx * 4 + 3];
-            printf("SPRITE: idx=%d x=%d y=%d tile=%02X flags=%02X\n",
-                idx, sprite_x, sprite_y, tile, flags);
             if (height == 16) tile &= 0xFE;
 
             int y_in = ly - sprite_y;
@@ -472,12 +470,13 @@ void save_byte(uint16_t address, uint8_t val){
                 memory->io[_LY - 0xFF00] = 0;
                 memory->io[_STAT - 0xFF00] &= 0xFC;  // mode 0
             }
-        }
-        else if (address == _DMA) {
+        } else if (address == _DMA) {
             uint16_t src = val << 8;
             dma_active = true;
             for (int i = 0; i < 0xA0; i++){
+                dma_active = false;
                 uint8_t data = read_byte(src + i);
+                dma_active = true;
                 memory->oam[i] = data;
                 update_timers(4);
             }
