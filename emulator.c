@@ -39,10 +39,11 @@ int main(int argc, char *argv[]) {
     struct stat st;
     fstat(fd, &st);                        
     memory->rom_size = st.st_size;
-    if (read(fd, memory->rom, memory->rom_size) != memory->rom_size)  {
+    if (read(fd, memory->rom, memory->rom_size) != memory->rom_size) {
         printf("Error: Could not load ROM file %s\n", argv[1]);
         exit(EXIT_FAILURE);
     }
+    close(fd);
 
     // Read cartridge type for MBC detection:
     uint8_t cart = memory->rom[0x0147];
@@ -122,14 +123,20 @@ int main(int argc, char *argv[]) {
                     case SDLK_RETURN:  joypad_btn  = pressed ? joypad_btn & ~8   : joypad_btn | 8;   break;  // Start
                     case SDLK_ESCAPE:  go = false; break;
                 }
-                if (pressed) memory->io[_IF - 0xFF00] |= 0x10; 
+                if (pressed) {
+                    printf("KEY: key=%d\n", e.key.keysym.sym);
+                    memory->io[_IF - 0xFF00] |= 0x10;
+                }
             }
         }
         if (ime) {
             handle_interrupts();
         }
-        // printf("PC: %04X  OPCODE: %02X  SP: %04X  A: %02X\n")
-        // reg->pc, memory->rom[reg->pc], reg->sp, reg->a);
+        if (reg->pc >= 0x7D50 && reg->pc <= 0x7D53) {
+            printf("REGSTATE: pc=%04X A=%02X B=%02X C=%02X carry=%d\n",
+                reg->pc, reg->af >> 8, reg->bc >> 8, reg->bc & 0xFF,
+                (reg->af & 0x10) ? 1 : 0);
+        }
         opcode = read_byte(reg->pc);
         ++reg->pc;
         if (opcode_table[opcode] != NULL) {
@@ -147,7 +154,6 @@ int main(int argc, char *argv[]) {
         }
     }
     exit_game();
-    close(fd);
     exit(EXIT_SUCCESS);
 }
 

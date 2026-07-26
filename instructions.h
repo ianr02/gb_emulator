@@ -14,6 +14,7 @@ extern uint8_t joypad_dpad;
 extern uint8_t joypad_btn;
 
 uint32_t framebuffer[160 * 144];
+uint8_t  bg_color[160 * 144];
 const uint32_t shades[4] = {
     0xFFFFFF,  // white
     0xAAAAAA,  // light gray
@@ -21,14 +22,18 @@ const uint32_t shades[4] = {
     0x000000   // black
 };
 
+void dump_hram(void);
+
 void prefix_function();
 
 void render_scanline(uint8_t ly) {
     uint8_t lcdc = memory->io[_LCDC - 0xFF00];
 
     if (!(lcdc & 0x80)) {
-        for (int x = 0; x < 160; x++)
+        for (int x = 0; x < 160; x++) {
             framebuffer[ly * 160 + x] = shades[0];
+            bg_color[ly * 160 + x] = 0;
+        }
         return;
     }
 
@@ -63,10 +68,13 @@ void render_scanline(uint8_t ly) {
             uint8_t color = ((byte1 >> (7 - pixel_x)) & 1) << 1 | ((byte0 >> (7 - pixel_x)) & 1);
             uint8_t shade = (bgp >> (color * 2)) & 3;
             framebuffer[ly * 160 + x] = shades[shade];
+            bg_color[ly * 160 + x] = color;
         }
     } else {
-        for (int x = 0; x < 160; x++)
+        for (int x = 0; x < 160; x++) {
             framebuffer[ly * 160 + x] = shades[0];
+            bg_color[ly * 160 + x] = 0;
+        }
     }
 
     // Window 
@@ -101,6 +109,7 @@ void render_scanline(uint8_t ly) {
                                 ((byte0 >> (7 - pixel_x)) & 1);
                 uint8_t shade = (bgp >> (color * 2)) & 3;
                 framebuffer[ly * 160 + x] = shades[shade];
+                bg_color[ly * 160 + x] = color;
             }
         }
     }
@@ -123,7 +132,7 @@ void render_scanline(uint8_t ly) {
             for (int j = i + 1; j < count; j++) {
                 int xi = memory->oam[visible[i] * 4 + 1] - 8;
                 int xj = memory->oam[visible[j] * 4 + 1] - 8;
-                if (xj < xi) {
+                if (xj > xi || (xj == xi && visible[j] > visible[i])) {
                     uint8_t tmp = visible[i];
                     visible[i] = visible[j];
                     visible[j] = tmp;
@@ -137,7 +146,8 @@ void render_scanline(uint8_t ly) {
             int sprite_x = memory->oam[idx * 4 + 1] - 8;
             uint8_t tile = memory->oam[idx * 4 + 2];
             uint8_t flags = memory->oam[idx * 4 + 3];
-
+            printf("SPRITE: idx=%d x=%d y=%d tile=%02X flags=%02X\n",
+                idx, sprite_x, sprite_y, tile, flags);
             if (height == 16) tile &= 0xFE;
 
             int y_in = ly - sprite_y;
@@ -160,7 +170,7 @@ void render_scanline(uint8_t ly) {
                 uint8_t pal = (flags & 0x10) ? obp1 : obp0;
                 uint8_t shade = (pal >> (color * 2)) & 3;
 
-                if (!(flags & 0x80) || framebuffer[ly * 160 + x] == shades[0])
+                if (!(flags & 0x80) || bg_color[ly * 160 + x] == 0)
                     framebuffer[ly * 160 + x] = shades[shade];
             }
         }
@@ -207,6 +217,13 @@ void update_ppu(uint8_t cycles) {
         }
 
         if (ly == 144) {
+            printf("VBLANK: ly=%d IF=%02X IE=%02X IME=%d [95=%02X 96=%02X 99=%02X 9A=%02X C6=%02X]\n", ly,
+                memory->io[_IF - 0xFF00], memory->ie, ime,
+                memory->hram[0x95-0x80], memory->hram[0x96-0x80],
+                memory->hram[0x99-0x80], memory->hram[0x9A-0x80],
+                memory->hram[0xC6-0x80]);
+            static int hram_dumped = 0;
+            if (!hram_dumped) { dump_hram(); hram_dumped = 1; }
             memory->io[_IF - 0xFF00] |= 0x01;       // VBlank INT
             stat = (stat & 0xFC) | 0x01;             // set mode 1
             if (stat & 0x10)
@@ -216,6 +233,7 @@ void update_ppu(uint8_t cycles) {
         } else if (ly >= 145 && ly <= 153) {
             stat = (stat & 0xFC) | 0x01;              // Stay in VBlank
         } else if (ly == 154) {
+            printf("FRAME: ly=154->0 ppu_cycle=%d\n", ppu_cycle);
             ly = 0;
             stat = (stat & 0xFC) | 0x02;
             if (stat & 0x20)
@@ -295,7 +313,7 @@ uint8_t read_byte(uint16_t address) {
                         return memory->rtc_regs[memory->ram_bank - 0x08];
                     return 0xFF;
                 }
-
+                if (!memory->ram_enable) return 0xFF;
             default: {
                 size_t idx = (memory->ram_bank * 0x2000) + (address - 0xA000);
                 if (idx < sizeof(memory->external))
@@ -317,13 +335,25 @@ uint8_t read_byte(uint16_t address) {
             if (!(memory->io[0] & 0x10)) both &= joypad_dpad;
             if (!(memory->io[0] & 0x20)) both &= joypad_btn;
             val |= both;
+    
             return val;
         } else if (address == _NR52)
             return memory->io[_NR52 - 0xFF00] & 0xF0;
-        else 
+        else if (address == _LY) {
+            printf("LY_READ: ly=%d lcdc=%02X\n",
+            memory->io[_LY - 0xFF00],
+            memory->io[_LCDC - 0xFF00]);
+            return memory->io[_LY - 0xFF00];
+        }
+        else {
             return memory->io[address - 0xFF00];
+        }
     } else if (address >= 0xFF80 && address <= 0xFFFE){
-        return memory->hram[address - 0xFF80];
+        uint8_t hram_val = memory->hram[address - 0xFF80];
+        if (address == 0xFFC6)
+            printf("COROUTINE: c6=%02X pc=%04X\n", hram_val, reg->pc);
+
+        return hram_val;
     } else if (address == 0xFFFF){
         return memory->ie;
     } else 
@@ -362,6 +392,8 @@ void save_byte(uint16_t address, uint8_t val){
                         break;
                     case CART_MBC3: 
                         memory->rom_bank = val & 0x7F;
+                        if (memory->rom_bank == 0) memory->rom_bank = 1;
+                        printf("BANK: bank=%d\n", memory->rom_bank); 
                         break;
                     case CART_MBC5:
                         if (address <= 0x2FFF)
@@ -416,6 +448,8 @@ void save_byte(uint16_t address, uint8_t val){
     } else if (address >= 0x8000 && address <= 0x9FFF) {
         if ((memory->io[_STAT - 0xFF00] & 0x03) != 3)
           memory->vram[address - 0x8000] = val;
+        else printf("VRAM_DROP: addr=%04X val=%02X ly=%d mode=3\n",
+            address, val, memory->io[_LY - 0xFF00]);
     } else if (address >= 0xA000 && address <= 0xBFFF) {
         if (memory->ram_enable) {
             switch (memory->cart_type) {
@@ -456,9 +490,13 @@ void save_byte(uint16_t address, uint8_t val){
         }
         else if (address == _DMA) {
             uint16_t src = val << 8;
+            printf("DMA: src=%04X\n", src);
             dma_active = true;
             for (int i = 0; i < 0xA0; i++){
                 dma_active = false;
+                if (src + i >= 0xFE00 && src + i <= 0xFE9F) {
+                    printf("DMA_OAM_SRC: src=%04X i=%d\n", src + i, i);
+                }
                 uint8_t data = read_byte(src + i);
                 dma_active = true;
                 memory->oam[i] = data;
@@ -472,11 +510,21 @@ void save_byte(uint16_t address, uint8_t val){
             memory->io[address - 0xFF00] = val;
     } else if (address >= 0xFF80 && address <= 0xFFFE){
         memory->hram[address - 0xFF80] = val;
+        if (address >= 0xFF95 && address <= 0xFFCF)
+            printf("HRAM_WR: addr=%02X val=%02X pc=%04X\n", address & 0xFF, val, reg->pc);
     } else if (address == 0xFFFF){
         memory->ie = val;
     } else {
         return;
     }
+}
+
+void dump_hram(void) {
+    printf("HRAM_DUMP: 80-9F:");
+    for (int i = 0; i < 32; i++) printf(" %02X", memory->hram[i]);
+    printf(" C0-CF:");
+    for (int i = 0x40; i < 0x50; i++) printf(" %02X", memory->hram[i]);
+    printf("\n");
 }
 
 void init_io_ports(void) {
@@ -541,6 +589,9 @@ void handle_interrupts() {
     for (int i = 0; i < 5; i++) {
         uint8_t bit = 1 << i;
         if (pending & bit) {
+            printf("INT: bit=%d vec=%04X IF=%02X IE=%02X pc=%04X\n",
+                i, vectors[i],
+                memory->io[_IF - 0xFF00], memory->ie, reg->pc);
             ime = false;
             ime_next = -1;
             update_timers(20);
