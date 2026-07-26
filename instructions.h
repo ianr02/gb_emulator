@@ -22,9 +22,13 @@ const uint32_t shades[4] = {
     0x000000   // black
 };
 
-void dump_hram(void);
-
 void prefix_function();
+
+static inline uint8_t vram_read(uint16_t addr) {
+    if (addr >= 0x8000 && addr <= 0x9FFF)
+        return memory->vram[addr - 0x8000];
+    return 0xFF;
+}
 
 void render_scanline(uint8_t ly) {
     uint8_t lcdc = memory->io[_LCDC - 0xFF00];
@@ -51,7 +55,7 @@ void render_scanline(uint8_t ly) {
             uint16_t scroll_x = (x + scx) & 0xFF;
             uint16_t scroll_y = (ly + scy) & 0xFF;
             uint16_t map_addr = map_base + (scroll_y / 8) * 32 + (scroll_x / 8);
-            uint8_t tile = memory->vram[map_addr - 0x8000];
+            uint8_t tile = vram_read(map_addr);
 
             uint16_t tile_addr;
             if (signed_mode)
@@ -62,8 +66,8 @@ void render_scanline(uint8_t ly) {
             uint8_t pixel_x = scroll_x & 7;
             uint8_t pixel_y = scroll_y & 7;
 
-            uint8_t byte0 = memory->vram[tile_addr + pixel_y * 2 - 0x8000];
-            uint8_t byte1 = memory->vram[tile_addr + pixel_y * 2 + 1 - 0x8000];
+            uint8_t byte0 = vram_read(tile_addr + pixel_y * 2);
+            uint8_t byte1 = vram_read(tile_addr + pixel_y * 2 + 1);
 
             uint8_t color = ((byte1 >> (7 - pixel_x)) & 1) << 1 | ((byte0 >> (7 - pixel_x)) & 1);
             uint8_t shade = (bgp >> (color * 2)) & 3;
@@ -91,7 +95,7 @@ void render_scanline(uint8_t ly) {
                 if (win_x < 0) continue;
 
                 uint16_t map_addr = win_map + ((ly - wy) / 8) * 32 + (win_x / 8);
-                uint8_t tile = memory->vram[map_addr - 0x8000];
+                uint8_t tile = vram_read(map_addr);
 
                 uint16_t tile_addr;
                 if (signed_mode)
@@ -102,8 +106,8 @@ void render_scanline(uint8_t ly) {
                 uint8_t pixel_x = win_x & 7;
                 uint8_t pixel_y = (ly - wy) & 7;
 
-                uint8_t byte0 = memory->vram[tile_addr + pixel_y * 2 - 0x8000];
-                uint8_t byte1 = memory->vram[tile_addr + pixel_y * 2 + 1 - 0x8000];
+                uint8_t byte0 = vram_read(tile_addr + pixel_y * 2);
+                uint8_t byte1 = vram_read(tile_addr + pixel_y * 2 + 1);
 
                 uint8_t color = ((byte1 >> (7 - pixel_x)) & 1) << 1 |
                                 ((byte0 >> (7 - pixel_x)) & 1);
@@ -160,8 +164,8 @@ void render_scanline(uint8_t ly) {
                 if (flags & 0x20) pixel_x = 7 - pixel_x;
 
                 uint16_t tile_addr = 0x8000 + tile * 16 + y_in * 2;
-                uint8_t byte0 = memory->vram[tile_addr - 0x8000];
-                uint8_t byte1 = memory->vram[tile_addr + 1 - 0x8000];
+                uint8_t byte0 = vram_read(tile_addr);
+                uint8_t byte1 = vram_read(tile_addr + 1);
 
                 uint8_t color = ((byte1 >> (7 - pixel_x)) & 1) << 1 |
                                 ((byte0 >> (7 - pixel_x)) & 1);
@@ -217,13 +221,7 @@ void update_ppu(uint8_t cycles) {
         }
 
         if (ly == 144) {
-            printf("VBLANK: ly=%d IF=%02X IE=%02X IME=%d [95=%02X 96=%02X 99=%02X 9A=%02X C6=%02X]\n", ly,
-                memory->io[_IF - 0xFF00], memory->ie, ime,
-                memory->hram[0x95-0x80], memory->hram[0x96-0x80],
-                memory->hram[0x99-0x80], memory->hram[0x9A-0x80],
-                memory->hram[0xC6-0x80]);
             static int hram_dumped = 0;
-            if (!hram_dumped) { dump_hram(); hram_dumped = 1; }
             memory->io[_IF - 0xFF00] |= 0x01;       // VBlank INT
             stat = (stat & 0xFC) | 0x01;             // set mode 1
             if (stat & 0x10)
@@ -233,7 +231,6 @@ void update_ppu(uint8_t cycles) {
         } else if (ly >= 145 && ly <= 153) {
             stat = (stat & 0xFC) | 0x01;              // Stay in VBlank
         } else if (ly == 154) {
-            printf("FRAME: ly=154->0 ppu_cycle=%d\n", ppu_cycle);
             ly = 0;
             stat = (stat & 0xFC) | 0x02;
             if (stat & 0x20)
@@ -339,30 +336,21 @@ uint8_t read_byte(uint16_t address) {
             return val;
         } else if (address == _NR52)
             return memory->io[_NR52 - 0xFF00] & 0xF0;
-        else if (address == _LY) {
-            printf("LY_READ: ly=%d lcdc=%02X\n",
-            memory->io[_LY - 0xFF00],
-            memory->io[_LCDC - 0xFF00]);
-            return memory->io[_LY - 0xFF00];
-        }
-        else {
+        else 
             return memory->io[address - 0xFF00];
-        }
-    } else if (address >= 0xFF80 && address <= 0xFFFE){
-        uint8_t hram_val = memory->hram[address - 0xFF80];
-        if (address == 0xFFC6)
-            printf("COROUTINE: c6=%02X pc=%04X\n", hram_val, reg->pc);
-
-        return hram_val;
-    } else if (address == 0xFFFF){
+    } else if (address >= 0xFF80 && address <= 0xFFFE)
+        return memory->hram[address - 0xFF80];
+    else if (address == 0xFFFF)
         return memory->ie;
-    } else 
+    else 
         return 0xFF;
 }
 
 void save_byte(uint16_t address, uint8_t val){
     if (dma_active && (address < 0xFF80 || address > 0xFFFE))
         return;
+
+    if (address < 0x0100) return;
 
     if (address <= 0x3FFF) {
         if (memory->cart_type == CART_MBC2) {
@@ -393,7 +381,6 @@ void save_byte(uint16_t address, uint8_t val){
                     case CART_MBC3: 
                         memory->rom_bank = val & 0x7F;
                         if (memory->rom_bank == 0) memory->rom_bank = 1;
-                        printf("BANK: bank=%d\n", memory->rom_bank); 
                         break;
                     case CART_MBC5:
                         if (address <= 0x2FFF)
@@ -448,8 +435,6 @@ void save_byte(uint16_t address, uint8_t val){
     } else if (address >= 0x8000 && address <= 0x9FFF) {
         if ((memory->io[_STAT - 0xFF00] & 0x03) != 3)
           memory->vram[address - 0x8000] = val;
-        else printf("VRAM_DROP: addr=%04X val=%02X ly=%d mode=3\n",
-            address, val, memory->io[_LY - 0xFF00]);
     } else if (address >= 0xA000 && address <= 0xBFFF) {
         if (memory->ram_enable) {
             switch (memory->cart_type) {
@@ -490,15 +475,9 @@ void save_byte(uint16_t address, uint8_t val){
         }
         else if (address == _DMA) {
             uint16_t src = val << 8;
-            printf("DMA: src=%04X\n", src);
             dma_active = true;
             for (int i = 0; i < 0xA0; i++){
-                dma_active = false;
-                if (src + i >= 0xFE00 && src + i <= 0xFE9F) {
-                    printf("DMA_OAM_SRC: src=%04X i=%d\n", src + i, i);
-                }
                 uint8_t data = read_byte(src + i);
-                dma_active = true;
                 memory->oam[i] = data;
                 update_timers(4);
             }
@@ -510,21 +489,11 @@ void save_byte(uint16_t address, uint8_t val){
             memory->io[address - 0xFF00] = val;
     } else if (address >= 0xFF80 && address <= 0xFFFE){
         memory->hram[address - 0xFF80] = val;
-        if (address >= 0xFF95 && address <= 0xFFCF)
-            printf("HRAM_WR: addr=%02X val=%02X pc=%04X\n", address & 0xFF, val, reg->pc);
     } else if (address == 0xFFFF){
         memory->ie = val;
     } else {
         return;
     }
-}
-
-void dump_hram(void) {
-    printf("HRAM_DUMP: 80-9F:");
-    for (int i = 0; i < 32; i++) printf(" %02X", memory->hram[i]);
-    printf(" C0-CF:");
-    for (int i = 0x40; i < 0x50; i++) printf(" %02X", memory->hram[i]);
-    printf("\n");
 }
 
 void init_io_ports(void) {
@@ -561,6 +530,7 @@ void init_io_ports(void) {
     save_byte(_NR42, 0x00);
     save_byte(_NR43, 0x00);
     save_byte(_NR44, 0xBF);
+
     save_byte(_NR50, 0x77);
     save_byte(_NR51, 0xF3);
     save_byte(_NR52, 0xF1); 
@@ -589,9 +559,6 @@ void handle_interrupts() {
     for (int i = 0; i < 5; i++) {
         uint8_t bit = 1 << i;
         if (pending & bit) {
-            printf("INT: bit=%d vec=%04X IF=%02X IE=%02X pc=%04X\n",
-                i, vectors[i],
-                memory->io[_IF - 0xFF00], memory->ie, reg->pc);
             ime = false;
             ime_next = -1;
             update_timers(20);
@@ -665,8 +632,6 @@ void POP_##reg_name() { \
     uint8_t low = read_byte(reg->sp++); \
     uint8_t high = read_byte(reg->sp++); \
     uint16_t val = (high << 8) | low; \
-    if (reg->reg_name == reg->af) \
-        val &= 0xFFF0; \
     reg->reg_name = val; \
     update_timers(12); \
 }

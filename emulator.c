@@ -124,18 +124,12 @@ int main(int argc, char *argv[]) {
                     case SDLK_ESCAPE:  go = false; break;
                 }
                 if (pressed) {
-                    printf("KEY: key=%d\n", e.key.keysym.sym);
                     memory->io[_IF - 0xFF00] |= 0x10;
                 }
             }
         }
         if (ime) {
             handle_interrupts();
-        }
-        if (reg->pc >= 0x7D50 && reg->pc <= 0x7D53) {
-            printf("REGSTATE: pc=%04X A=%02X B=%02X C=%02X carry=%d\n",
-                reg->pc, reg->af >> 8, reg->bc >> 8, reg->bc & 0xFF,
-                (reg->af & 0x10) ? 1 : 0);
         }
         opcode = read_byte(reg->pc);
         ++reg->pc;
