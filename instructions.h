@@ -84,8 +84,7 @@ void render_scanline(uint8_t ly) {
     // Window 
     if (lcdc & 0x20) {
         uint8_t wy = memory->io[_WY - 0xFF00];
-        uint8_t wx = memory->io[_WX - 0xFF00];
-        wx = (wx >= 7) ? wx - 7 : 0;
+        int16_t wx = memory->io[_WX - 0xFF00] - 7;
 
         if (ly >= wy) {
             uint16_t win_map = (lcdc & 0x40) ? 0x9C00 : 0x9800;
@@ -144,7 +143,7 @@ void render_scanline(uint8_t ly) {
             }
         }
 
-        for (int i = 0; i < count; i++) {
+        for (int i = count - 1; i >= 0; i--) {
             int idx = visible[i];
             int sprite_y = memory->oam[idx * 4] - 16;
             int sprite_x = memory->oam[idx * 4 + 1] - 8;
@@ -183,7 +182,7 @@ void render_scanline(uint8_t ly) {
                       &framebuffer[ly * 160], 160 * sizeof(uint32_t));
 }
 
-void update_ppu(uint8_t cycles) {
+void update_ppu(uint16_t cycles) {
     static uint16_t ppu_cycle = 0;
 
     // Check LCD enable
@@ -219,7 +218,6 @@ void update_ppu(uint8_t cycles) {
         }
 
         if (ly == 144) {
-            static int hram_dumped = 0;
             memory->io[_IF - 0xFF00] |= 0x01;       // VBlank INT
             stat = (stat & 0xFC) | 0x01;             // set mode 1
             if (stat & 0x10)
@@ -258,28 +256,25 @@ void update_ppu(uint8_t cycles) {
     memory->io[_STAT - 0xFF00] = stat;
 }
 
-void update_timers(uint8_t cycles) {
+void update_timers(uint16_t cycles) {
+    static const uint8_t bitPos[] = {10, 4, 6, 8};
     uint8_t tac = memory->io[_TAC - 0xFF00];
-    for (int i = 0; i < cycles; i++) {
-        uint16_t oldClock = internalClock;
-        internalClock++;
-        // Check for overflow if timer is enabled
-        if (tac & 0x04) {
-            static const uint8_t bitPos[] = {10, 4, 6, 8};
-            uint8_t bit = bitPos[tac & 0x03];  
-            int oldBit = (oldClock >> bit) & 1;
-            int newBit = (internalClock >> bit) & 1;
-            if (oldBit == 1 && newBit == 0) {
-                uint8_t tima = memory->io[_TIMA - 0xFF00] + 1;
-                if (tima == 0) {
-                    tima = memory->io[_TMA - 0xFF00];
-                    uint8_t if_reg = memory->io[_IF - 0xFF00];
-                    memory->io[_IF - 0xFF00] = if_reg | 0x04;
-                }
-                memory->io[_TIMA - 0xFF00] = tima;
+    uint16_t newClock = internalClock + cycles;
+    if (tac & 0x04) {
+        uint8_t bit = bitPos[tac & 0x03];
+        uint16_t mask = 1 << bit;
+
+        bool edge = ((newClock) & mask) == 0 && (internalClock & mask) != 0;
+        if (edge) {
+            uint8_t tima = memory->io[_TIMA - 0xFF00] + 1;
+            if (tima == 0) {
+                tima = memory->io[_TMA - 0xFF00];
+                memory->io[_IF - 0xFF00] |= 0x04;
             }
+            memory->io[_TIMA - 0xFF00] = tima;
         }
-    }
+    } 
+    internalClock = newClock;
     update_ppu(cycles);
     memory->io[_DIV - 0xff00] = (internalClock >> 8) & 0xFF;
 }
@@ -293,7 +288,7 @@ uint8_t read_byte(uint16_t address) {
     } else if (address >= 0x4000 && address <= 0x7FFF) {
         return memory->rom[(memory->rom_bank * 0x4000) + (address - 0x4000)];
     } else if (address >= 0x8000 && address <= 0x9FFF) {
-        if ((memory->io[_STAT - 0xFF00] & 0x03) == 3) return 0xFF;
+        if ((memory->io[_STAT - 0xFF00] & 0x03) >= 2) return 0xFF;
         return memory->vram[address - 0x8000];
     } else if (address >= 0xA000 && address <= 0xBFFF) {
         switch (memory->cart_type) {
@@ -321,7 +316,7 @@ uint8_t read_byte(uint16_t address) {
     } else if (address >= 0xE000 && address <= 0xFDFF) {
         return memory->wram[address - 0xE000];
     } else if (address >= 0xFE00 && address <= 0xFE9F) {
-        if ((memory->io[_STAT - 0xFF00] & 0x03) == 2) return 0xFF;
+        if ((memory->io[_STAT - 0xFF00] & 0x03) >= 2) return 0xFF;
         return memory->oam[address - 0xFE00];
     } else if (address >= 0xFF00 && address <= 0xFF7F){
         if (address == _JOYP) {
@@ -432,7 +427,7 @@ void save_byte(uint16_t address, uint8_t val){
         }
     } else if (address >= 0x8000 && address <= 0x9FFF) {
         if ((memory->io[_STAT - 0xFF00] & 0x03) != 3)
-          memory->vram[address - 0x8000] = val;
+        memory->vram[address - 0x8000] = val;
     } else if (address >= 0xA000 && address <= 0xBFFF) {
         if (memory->ram_enable) {
             switch (memory->cart_type) {
@@ -455,10 +450,10 @@ void save_byte(uint16_t address, uint8_t val){
     } else if (address >= 0xC000 && address <= 0xDFFF) {
         memory->wram[address - 0xC000] = val;
     } else if (address >= 0xE000 && address <= 0xFDFF) {
+        if ((memory->io[_STAT - 0xFF00] & 0x03) < 2)
         memory->wram[address - 0xE000] = val;
     } else if (address >= 0xFE00 && address <= 0xFE9F) {
-        if ((memory->io[_STAT - 0xFF00] & 0x03) != 2)
-                memory->oam[address - 0xFE00] = val;
+        memory->oam[address - 0xFE00] = val;
     } else if (address >= 0xFF00 && address <= 0xFF7F){
         if (address == _DIV) internalClock = 0;
         else if (address == _LY) return;
@@ -472,15 +467,18 @@ void save_byte(uint16_t address, uint8_t val){
             }
         } else if (address == _DMA) {
             uint16_t src = val << 8;
-            dma_active = true;
-            for (int i = 0; i < 0xA0; i++){
-                dma_active = false;
-                uint8_t data = read_byte(src + i);
-                dma_active = true;
-                memory->oam[i] = data;
-                update_timers(4);
+            if (src <= 0x3FFF) {
+                memcpy(memory->oam, memory->rom + src, 0xA0);
+            } else if (src >= 0x4000 && src <= 0x7FFF) {
+                memcpy(memory->oam, memory->rom + (memory->rom_bank * 0x4000) + (src - 0x4000), 0xA0);
+            } else if (src >= 0x8000 && src <= 0x9FFF) {
+                memcpy(memory->oam, memory->vram + (src - 0x8000), 0xA0);
+            } else if (src >= 0xC000 && src <= 0xDFFF) {
+                memcpy(memory->oam, memory->wram + (src - 0xC000), 0xA0);
+            } else if (src >= 0xE000 && src <= 0xFDFF) {
+                memcpy(memory->oam, memory->wram + (src - 0xE000), 0xA0);
             }
-            dma_active = false;
+            for (int i = 0; i < 0xa0; ++i) update_timers(4);
         }
         else if (address == _STAT)
             memory->io[_STAT - 0xFF00] = (val & 0x78) | (memory->io[_STAT - 0xFF00] & 0x07);
