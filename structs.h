@@ -154,5 +154,6 @@ int8_t ime_next = -1;
 bool ei = false, ime = false;
 
 bool prefix_flag = false;
+bool halt_bug = false;
 
 #endif

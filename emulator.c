@@ -131,7 +131,11 @@ int main(int argc, char *argv[]) {
             handle_interrupts();
         }
         opcode = read_byte(reg->pc);
-        ++reg->pc;
+        if (!halt_bug)
+            ++reg->pc;
+        else
+            halt_bug = false;
+
         if (opcode_table[opcode] != NULL) {
             opcode_table[opcode]();
         } else {
