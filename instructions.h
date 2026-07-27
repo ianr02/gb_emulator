@@ -204,8 +204,8 @@ void update_ppu(uint16_t cycles) {
 
     ppu_cycle += cycles;
 
-    while (ppu_cycle >= 456) {
-        ppu_cycle -= 456;
+    while (ppu_cycle >= scanline_cycles) {
+        ppu_cycle -= scanline_cycles;
 
         if (ly < 144)
             render_scanline(ly);
