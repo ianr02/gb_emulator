@@ -264,7 +264,7 @@ void update_ppu(uint16_t cycles) {
 void update_timers(uint16_t cycles) {
     static const uint8_t bitPos[] = {9, 3, 5, 7};
     uint8_t tac = memory->io[_TAC - 0xFF00];
-    uint16_t newClock = internalClock + cycles;
+    uint32_t newClock = internalClock + cycles;
     if (tac & 0x04) {
         uint8_t bit = bitPos[tac & 0x03];
         uint16_t mask = 1 << bit;

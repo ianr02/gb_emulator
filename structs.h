@@ -149,7 +149,7 @@ extern const uint32_t shades[4];
 GameBoyMemory *memory;
 registers *reg;
 
-uint16_t internalClock = 0;
+uint32_t internalClock = 0;
 int8_t ime_next = -1;
 bool ei = false, ime = false;
 
