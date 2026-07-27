@@ -186,7 +186,7 @@ void render_scanline(uint8_t ly) {
 }
 
 void update_ppu(uint16_t cycles) {
-    static uint16_t ppu_cycle = 0;
+    static uint32_t ppu_cycle = 0;
 
     // Check LCD enable
     uint8_t lcdc = memory->io[_LCDC - 0xFF00];
