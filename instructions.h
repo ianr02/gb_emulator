@@ -488,7 +488,7 @@ void save_byte(uint16_t address, uint8_t val){
         } else if (address == _STAT)
             memory->io[_STAT - 0xFF00] = (val & 0x78) | (memory->io[_STAT - 0xFF00] & 0x07);
         else if (address == _KEY1)
-            memory->io[_KEY1 - 0xFF00] = (memory->io[_KEY1 - 0xFF00] & 1) | ((val & 1) << 7);
+            memory->io[_KEY1 - 0xFF00] = (memory->io[_KEY1 - 0xFF00] & 0x80) | (val & 1);
         else 
             memory->io[address - 0xFF00] = val;
     } else if (address >= 0xFF80 && address <= 0xFFFE){
@@ -1387,10 +1387,10 @@ void STOP() {
     ++reg->pc;
     update_timers(4);
     
-    uint8_t key1 = memory->io[0x4D];
-    if (key1 & 0x80) {
+    uint8_t key1 = memory->io[_KEY1 - 0xFF00];
+    if (key1 & 0x01) {
         double_speed = !double_speed;
-        memory->io[0x4D] = double_speed ? 0x01 : 0x00;
+        memory->io[_KEY1 - 0xFF00] = double_speed ? 0x01 : 0x00;
         return;
     }
     if (ime) {
