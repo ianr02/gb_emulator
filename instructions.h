@@ -173,13 +173,44 @@ void render_scanline(uint8_t ly) {
 
                 if (!(flags & 0x80) || bg_color[ly * 160 + x] == 0)
                     framebuffer[ly * 160 + x] = shades[shade];
+                printf("SPRITE: ly=%d idx=%d tile=%d x=%d y=%d flags=%02X "
+       "byte0=%02X byte1=%02X color=%d obp0=%02X obp1=%02X\n",
+       ly, idx, tile, sprite_x, sprite_y, flags,
+       byte0, byte1, color,
+       memory->io[_OBP0-0xFF00], memory->io[_OBP1-0xFF00]);
+                
+                if (ly == 80 && count > 0) {
+    int idx = visible[count-1];
+    int x = memory->oam[idx*4+1] - 8;
+    int t = memory->oam[idx*4+2];
+    int f = memory->oam[idx*4+3];
+    int y = memory->oam[idx*4] - 16;
+    uint16_t ta = 0x8000 + (t * 16);
+    printf("SPR_DUMP: ly=80 idx=%d tile=%d y=%d x=%d flags=%02X "
+           "tile_addr=%04X obp0=%02X obp1=%02X "
+           "vram[0..15]=", idx, t, y, x, f, ta,
+           memory->io[0x48], memory->io[0x49]);
+    for (int b = 0; b < 16; b++)
+        printf("%02X ", memory->vram[ta - 0x8000 + b]);
+    printf("\n");
+}
+
+                if (ly == 80 && i == count-1) { // last drawn sprite (highest priority)
+                    printf("SPRITE: ly=%d idx=%d tile=%d y=%d x=%d flags=%02X "
+                        "byte0=%02X byte1=%02X color=%d obp0=%02X obp1=%02X shade=%d\n",
+                        ly, idx, tile, sprite_y, sprite_x, flags,
+                        byte0, byte1, color,
+                        memory->io[_OBP0-0xFF00], memory->io[_OBP1-0xFF00], shade);
+                }
             }
         }
+        
     }
 
     // Per-scanline texture upload
     SDL_UpdateTexture(ppu_texture, &(SDL_Rect){0, ly, 160, 1},
                       &framebuffer[ly * 160], 160 * sizeof(uint32_t));
+
 }
 
 void update_ppu(uint16_t cycles) {
@@ -232,7 +263,9 @@ void update_ppu(uint16_t cycles) {
             if (stat & 0x20)
                 memory->io[_IF - 0xFF00] |= 0x02;
         } else {
-            stat = (stat & 0xFC) | 0x02;              //set mode 2
+            stat = (stat & 0xFC) | 0x02;
+            if (stat & 0x20)
+                memory->io[_IF - 0xFF00] |= 0x02;             //set mode 2
         }
 
         memory->io[_LY - 0xFF00] = ly;
@@ -280,15 +313,17 @@ void update_timers(uint16_t cycles) {
 }
 
 uint8_t read_byte(uint16_t address) {
-    if (dma_active && (address < 0xFF80 || address > 0xFFFE))
-        return 0xFF;
-
     if (address <= 0x3FFF) {
         return memory->rom[address];
     } else if (address >= 0x4000 && address <= 0x7FFF) {
-        return memory->rom[(memory->rom_bank * 0x4000) + (address - 0x4000)];
+        uint8_t rval = memory->rom[(memory->rom_bank * 0x4000) + (address - 0x4000)];
+        size_t rom_idx = (memory->rom_bank * 0x4000) + (address - 0x4000);
+        if (rval != 0 && rom_idx >= 0x20000)  // only log reads from bank 2+ (tile data area)
+            printf("ROM read: addr=%04X bank=%u rom_idx=%zu val=%02X\n", address, memory->rom_bank, rom_idx, rval);
+        return rval;
+        // return memory->rom[(memory->rom_bank * 0x4000) + (address - 0x4000)];
     } else if (address >= 0x8000 && address <= 0x9FFF) {
-        if ((memory->io[_STAT - 0xFF00] & 0x03) >= 2) return 0xFF;
+        if ((memory->io[_STAT - 0xFF00] & 0x03) == 3) return 0xFF;
         return memory->vram[address - 0x8000];
     } else if (address >= 0xA000 && address <= 0xBFFF) {
         switch (memory->cart_type) {
@@ -340,9 +375,6 @@ uint8_t read_byte(uint16_t address) {
 }
 
 void save_byte(uint16_t address, uint8_t val){
-    if (dma_active && (address < 0xFF80 || address > 0xFFFE))
-        return;
-
     if (address < 0x0100) return;
 
     if (address <= 0x3FFF) {
@@ -351,8 +383,10 @@ void save_byte(uint16_t address, uint8_t val){
                 uint8_t bank = val & 0x0F;
                 if (bank == 0) bank = 1;
                 memory->rom_bank = bank;
+                printf("MBC2 bank: addr=%04X val=%02X -> rom_bank=%u\n", address, val, memory->rom_bank);
             } else {
                 memory->ram_enable = (val & 0x0F) == 0x0A;
+                printf("MBC2 ram_enable: addr=%04X val=%02X -> %s\n", address, val, memory->ram_enable ? "ON" : "OFF");
             }
         } else {
             if (address <= 0x1FFF) {
@@ -361,21 +395,25 @@ void save_byte(uint16_t address, uint8_t val){
                         break;
                     default: 
                         memory->ram_enable = (val & 0x0F) == 0x0A;
+                        printf("ram_enable: addr=%04X val=%02X -> %s\n", address, val, memory->ram_enable ? "ON" : "OFF");
                         break;
                 }
             } else {
                 uint8_t bank;
                 switch (memory->cart_type) {
                     case CART_MBC1: 
+                        printf("MBC1 bank: addr=%04X val=%02X\n", address, val);
                         bank = val & 0x1F;
                         if (bank == 0) bank = 1;
                         memory->rom_bank = (memory->rom_bank & 0xE0) | bank;
                         break;
                     case CART_MBC3: 
+                        printf("MBC3 bank: addr=%04X val=%02X\n", address, val);
                         memory->rom_bank = val & 0x7F;
                         if (memory->rom_bank == 0) memory->rom_bank = 1;
                         break;
                     case CART_MBC5:
+                        printf("MBC5 bank: addr=%04X val=%02X\n", address, val);
                         if (address <= 0x2FFF)
                             memory->rom_bank = (memory->rom_bank & 0x100) | val;
                         else
@@ -389,15 +427,18 @@ void save_byte(uint16_t address, uint8_t val){
     } else if (address >= 0x4000 && address <= 0x5FFF) {
          switch (memory->cart_type) {
             case CART_MBC1:
+                printf("MBC1 bank: addr=%04X val=%02X\n", address, val);
                 if (memory->banking_mode == 0)
                     memory->rom_bank = (memory->rom_bank & 0x1F) | ((val & 0x03) << 5);
                 else
                     memory->ram_bank = val & 0x03;
                 break;
             case CART_MBC3:
+                printf("MBC3 bank: addr=%04X val=%02X\n", address, val);
                 memory->ram_bank = val & 0x0F;  // 0x00-0x03 = RAM, 0x08-0x0C = RTC
                 break;
             case CART_MBC5:
+                printf("MBC5 bank: addr=%04X val=%02X\n", address, val);
                 memory->ram_bank = val & 0x0F;
                 break;
             default: break;
@@ -406,8 +447,10 @@ void save_byte(uint16_t address, uint8_t val){
         switch (memory->cart_type) {
             case CART_MBC1: 
                 memory->banking_mode = val & 0x01;
+                printf("MBC1 banking_mode: addr=%04X val=%02X -> mode=%u\n", address, val, memory->banking_mode);
                 break;
             case CART_MBC3: 
+                printf("MBC3 RTC latch: addr=%04X val=%02X state=%u\n", address, val, memory->rtc_latch_state);
                 if (memory->rtc_latch_state == 0 && val == 0x00)
                     memory->rtc_latch_state = 1;
                 else if (memory->rtc_latch_state == 1 && val == 0x01) {
@@ -419,6 +462,7 @@ void save_byte(uint16_t address, uint8_t val){
                     uint16_t days = t / 86400;
                     memory->rtc_regs[3] = days & 0xFF;
                     memory->rtc_regs[4] = (memory->rtc_regs[4] & 0x80) | ((days >> 8) & 0x01);
+                    printf("MBC3 RTC latched: %02d:%02d:%02d day=%u\n", tm->tm_hour, tm->tm_min, tm->tm_sec, days);
                     memory->rtc_latch_state = 0;
                 } else
                     memory->rtc_latch_state = 0;
@@ -426,8 +470,10 @@ void save_byte(uint16_t address, uint8_t val){
             default: break;
         }
     } else if (address >= 0x8000 && address <= 0x9FFF) {
-        if ((memory->io[_STAT - 0xFF00] & 0x03) != 3)
-        memory->vram[address - 0x8000] = val;
+        if ((memory->io[_STAT - 0xFF00] & 0x03) != 3) {
+            if (val != 0) printf("VRAM non-zero write: addr=%04X val=%02X\n", address, val);
+            memory->vram[address - 0x8000] = val;
+        }
     } else if (address >= 0xA000 && address <= 0xBFFF) {
         if (memory->ram_enable) {
             switch (memory->cart_type) {
@@ -440,22 +486,29 @@ void save_byte(uint16_t address, uint8_t val){
                 default:
                     if (memory->ram_bank >= 0x08 && memory->ram_bank <= 0x0C) {
                         memory->rtc_regs[memory->ram_bank - 0x08] = val;
+                        printf("RTC write: reg=%u val=%02X\n", memory->ram_bank - 0x08, val);
                     } else {
                         size_t idx = (memory->ram_bank * 0x2000) + (address - 0xA000);
-                        if (idx < sizeof(memory->external))
+                        if (idx < sizeof(memory->external)){
                             memory->external[idx] = val;
+                            printf("ExtRAM write: addr=%04X bank=%u idx=%zu val=%02X\n", address, memory->ram_bank, idx, val);
+                        }
                     }
             }
         }
     } else if (address >= 0xC000 && address <= 0xDFFF) {
         memory->wram[address - 0xC000] = val;
     } else if (address >= 0xE000 && address <= 0xFDFF) {
-        if ((memory->io[_STAT - 0xFF00] & 0x03) < 2)
         memory->wram[address - 0xE000] = val;
     } else if (address >= 0xFE00 && address <= 0xFE9F) {
-        memory->oam[address - 0xFE00] = val;
+        if ((memory->io[_STAT - 0xFF00] & 0x03) < 2)
+            memory->oam[address - 0xFE00] = val;
     } else if (address >= 0xFF00 && address <= 0xFF7F){
         if (address == _DIV) internalClock = 0;
+        else if (address == _OBP0 || address == _OBP1){
+            printf("OBP write: addr=%04X val=%02X\n", address, val);
+            memory->io[address - 0xFF00] = val;
+        }
         else if (address == _LY) return;
         else if (address == _JOYP) memory->io[0] = val & 0x30;
         else if (address == _NR52) memory->io[_NR52 - 0xFF00] = val & 0xF0;
@@ -1373,6 +1426,7 @@ void HALT() {
             update_timers(4);
     }  else {
         update_timers(4);
+        --reg->pc;
     }
 }
 
@@ -1753,8 +1807,8 @@ void RETI() {
     uint8_t high = read_byte(reg->sp++);
     uint16_t address = (high<<8) | low;
     reg->pc = address;
+    ei = true; ime_next = 1;
     update_timers(16);
-    ime = true;
 }
 
 GEN_RESET_n(a);

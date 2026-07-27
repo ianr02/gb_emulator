@@ -80,7 +80,7 @@ int main(int argc, char *argv[]) {
         perror("mkdir");
         exit(EXIT_FAILURE);
     }
-
+    /*
     snprintf(savepath, sizeof(savepath), ".saves/%s.sav", title);
     int sf = open(savepath, O_RDONLY);
     if (sf != -1) {
@@ -95,12 +95,13 @@ int main(int argc, char *argv[]) {
         }
         close(sf);
     }
+        */
 
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
     ppu_window   = SDL_CreateWindow("Game Boy", SDL_WINDOWPOS_CENTERED,
                                     SDL_WINDOWPOS_CENTERED, 160*4, 144*4, 0);
-    ppu_renderer = SDL_CreateRenderer(ppu_window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    ppu_renderer = SDL_CreateRenderer(ppu_window, -1, SDL_RENDERER_ACCELERATED);
     ppu_texture  = SDL_CreateTexture(ppu_renderer, SDL_PIXELFORMAT_ARGB8888,
                                      SDL_TEXTUREACCESS_STREAMING, 160, 144);
     SDL_RenderSetLogicalSize(ppu_renderer, 160, 144);
