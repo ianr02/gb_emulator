@@ -28,6 +28,9 @@
 // Input Registers
 #define _JOYP 0xFF00
 
+
+#define _KEY1 0xFF4D
+
 // Timer Registers
 #define _DIV  0xFF04
 #define _TIMA 0xFF05
@@ -149,11 +152,12 @@ extern const uint32_t shades[4];
 GameBoyMemory *memory;
 registers *reg;
 
-uint32_t internalClock = 0;
+uint16_t internalClock = 0;
 int8_t ime_next = -1;
 bool ei = false, ime = false;
 
 bool prefix_flag = false;
 bool halt_bug = false;
+bool double_speed = false;
 
 #endif

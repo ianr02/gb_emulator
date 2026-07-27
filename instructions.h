@@ -200,6 +200,7 @@ void update_ppu(uint16_t cycles) {
     uint8_t ly = memory->io[_LY - 0xFF00];
     uint8_t lyc = memory->io[_LYC - 0xFF00];
     uint8_t stat = memory->io[_STAT - 0xFF00];
+    uint16_t scanline_cycles = double_speed ? 912 : 456;
 
     ppu_cycle += cycles;
 
@@ -246,10 +247,12 @@ void update_ppu(uint16_t cycles) {
     if (ly < 144 && (lcdc & 0x80)) {
         uint8_t old_mode = stat & 0x03;
         uint8_t new_mode;
+        uint16_t mode2_end = double_speed ? 160 : 80;
+        uint16_t mode3_end = double_speed ? 504 : 252;
 
-        if (ppu_cycle < 80)       new_mode = 2;  // OAM search
-        else if (ppu_cycle < 252) new_mode = 3;  // Pixel transfer
-        else                      new_mode = 0;  // HBlank
+        if (ppu_cycle < mode2_end)       new_mode = 2;  // OAM search
+        else if (ppu_cycle < mode3_end)  new_mode = 3;  // Pixel transfer
+        else                             new_mode = 0;  // HBlank
 
         if (new_mode != old_mode) {
             if ((new_mode == 0 && (stat & 0x08)) || (new_mode == 2 && (stat & 0x20))) 
@@ -264,7 +267,7 @@ void update_ppu(uint16_t cycles) {
 void update_timers(uint16_t cycles) {
     static const uint8_t bitPos[] = {9, 3, 5, 7};
     uint8_t tac = memory->io[_TAC - 0xFF00];
-    uint32_t newClock = internalClock + cycles;
+    uint16_t newClock = internalClock + cycles;
     if (tac & 0x04) {
         uint8_t bit = bitPos[tac & 0x03];
         uint16_t mask = 1 << bit;
@@ -282,7 +285,7 @@ void update_timers(uint16_t cycles) {
     }
     internalClock = newClock;
     update_ppu(cycles);
-    memory->io[_DIV - 0xff00] = (internalClock >> 8) & 0xFF;
+    memory->io[_DIV - 0xff00] = (internalClock >> (double_speed ? 9 : 8)) & 0xFF;
 }
 
 uint8_t read_byte(uint16_t address) {
@@ -333,6 +336,8 @@ uint8_t read_byte(uint16_t address) {
             return val;
         } else if (address == _NR52)
             return memory->io[_NR52 - 0xFF00] & 0xF0;
+        else if (address == _KEY1)
+            return (memory->io[0x4D] & 0x81) | 0x7E;
         else 
             return memory->io[address - 0xFF00];
     } else if (address >= 0xFF80 && address <= 0xFFFE)
@@ -480,9 +485,10 @@ void save_byte(uint16_t address, uint8_t val){
                 memcpy(memory->oam, memory->wram + (src - 0xE000), 0xA0);
             }
             for (int i = 0; i < 0xa0; ++i) update_timers(4);
-        }
-        else if (address == _STAT)
+        } else if (address == _STAT)
             memory->io[_STAT - 0xFF00] = (val & 0x78) | (memory->io[_STAT - 0xFF00] & 0x07);
+        else if (address == _KEY1)
+            memory->io[_KEY1 - 0xFF00] = (memory->io[_KEY1 - 0xFF00] & 1) | ((val & 1) << 7);
         else 
             memory->io[address - 0xFF00] = val;
     } else if (address >= 0xFF80 && address <= 0xFFFE){
@@ -500,6 +506,7 @@ void init_io_ports(void) {
 
     save_byte(_LY,   0x00);
     save_byte(_STAT, 0x00);
+    save_byte(_KEY1, 0x00);
 
     // Timer Defaults
     save_byte(_TIMA, 0x0);
@@ -1379,12 +1386,18 @@ void HALT() {
 void STOP() {
     ++reg->pc;
     update_timers(4);
-    // Wait for any interrupt (like HALT, but also affects LCD)
+    
+    uint8_t key1 = memory->io[0x4D];
+    if (key1 & 0x80) {
+        double_speed = !double_speed;
+        memory->io[0x4D] = double_speed ? 0x01 : 0x00;
+        return;
+    }
     if (ime) {
         while (!(memory->io[_IF - 0xFF00] & memory->ie))
             update_timers(4);
     } else {
-        while (!(memory->io[_IF - 0xFF00] & 0x1F))    // IF has ANY bit set?
+        while (!(memory->io[_IF - 0xFF00] & 0x1F))
             update_timers(4);
     }
 }
