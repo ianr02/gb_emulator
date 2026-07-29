@@ -475,6 +475,15 @@ void save_byte(uint16_t address, uint8_t val){
     } else if (address >= 0xFF00 && address <= 0xFF7F){
         if (address == _DIV) internalClock = 0;
         else if (address == _LY) return;
+        else if (address == 0xFF02) {
+    memory->io[0xFF02 - 0xFF00] = val & 0x81;
+    if (val & 0x80) {
+        uint8_t sb = memory->io[0xFF01 - 0xFF00];
+        putchar(sb);
+        fflush(stdout);
+        memory->io[0xFF02 - 0xFF00] &= ~0x80;
+    }
+}
         else if (address == _JOYP) memory->io[0] = val & 0x30;
         else if (address == _NR52) {
             memory->io[_NR52 - 0xFF00] = (memory->io[_NR52 - 0xFF00] & 0x0F) | (val & 0xF0);
