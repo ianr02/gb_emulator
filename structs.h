@@ -9,11 +9,9 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <time.h>
-#include <dirent.h>
 #include <errno.h>
 #include <string.h>
 
-#define GAMEBOY_MEMORY_SIZE (1 << 16) // 64KB
 #define INIT_PC 0x0100
 
 #define CART_ROM_ONLY 0x00
@@ -28,14 +26,13 @@
 // Input Registers
 #define _JOYP 0xFF00
 
-
-#define _KEY1 0xFF4D
-
 // Timer Registers
 #define _DIV  0xFF04
 #define _TIMA 0xFF05
 #define _TMA  0xFF06
 #define _TAC  0xFF07
+
+
 
 // Audio Registers (Sound Channel 1)
 #define _NR10 0xFF10
@@ -154,12 +151,19 @@ extern const uint32_t shades[4];
 GameBoyMemory *memory;
 registers *reg;
 
-uint32_t internalClock = 0;
+uint32_t div_counter = 0;
+uint32_t tima_accumulator = 0;
 int8_t ime_next = -1;
 bool ei = false, ime = false;
 
 bool prefix_flag = false;
 bool halt_bug = false;
-bool double_speed = false;
+// DMG only — no double speed
+uint16_t tima_overflow_cycles = 0;
+bool tima_write_during_overflow = false;
+bool prev_stat_line = false;
+uint8_t sprites_this_line = 0;
+uint8_t scx_sampled = 0;
+uint8_t window_line_counter = 0;
 
 #endif

@@ -22,64 +22,12 @@ const uint32_t shades[4] = {
     0x000000   // black
 };
 
-bool tima_overflow; 
-
 void prefix_function();
 
 static inline uint8_t vram_read(uint16_t addr) {
     if (addr >= 0x8000 && addr <= 0x9FFF)
         return memory->vram[addr - 0x8000];
     return 0xFF;
-}
-
-void fps_counter(){
-    static uint32_t last_fps_time = 0;
-    static int fps_count = 0;
-    static uint32_t fps_display = 0;
-    uint32_t now_fps = SDL_GetTicks();
-    fps_count++;
-    if (now_fps - last_fps_time >= 1000) {
-        fps_display = fps_count;
-        fps_count = 0;
-        last_fps_time = now_fps;
-    }
-    if (fps_display > 0) {
-        char buf[8];
-        snprintf(buf, sizeof(buf), "%u", fps_display);
-        int len = strlen(buf);
-        int start_x = 160 - len * 6 - 2;
-        int start_y = 2;
-        const uint8_t digits[10][5] = {
-            {0x7E,0x81,0x81,0x81,0x7E},{0x02,0x42,0xFE,0x42,0x02},
-            {0x46,0x89,0x91,0xA1,0x46},{0x42,0x81,0x91,0xA9,0x46},
-            {0x18,0x28,0x48,0xFE,0x08},{0xF2,0x91,0x91,0x91,0x8E},
-            {0x3E,0x51,0x91,0x91,0x4E},{0x80,0x87,0x88,0x90,0xE0},
-            {0x6E,0x91,0x91,0x91,0x6E},{0x72,0x89,0x89,0x89,0x7E}
-        };
-        for (int i = 0; i < len; i++) {
-            int d = buf[i] - '0';
-            if (d < 0 || d > 9) continue;
-            for (int row = 0; row < 5 && start_y + row < 144; row++) {
-                for (int col = 0; col < 5; col++) {
-                    int x = start_x + i * 6 + col;
-                    int y = start_y + row;
-                    if (x >= 0 && x < 160) {
-                        framebuffer[y * 160 + x] =
-                            (digits[d][row] & (1 << (4 - col))) ? 0xFFFFFF : 0x000000;
-                    }
-                }
-            }
-        }
-    }
-    SDL_UpdateTexture(ppu_texture, NULL, framebuffer, 160 * sizeof(uint32_t));
-
-    static uint32_t last_frame = 0;
-    uint32_t now = SDL_GetTicks();
-    uint32_t elapsed = now - last_frame;
-    if (elapsed < 16 && last_frame != 0) {
-        SDL_Delay(16 - elapsed);
-    }
-    last_frame = SDL_GetTicks();
 }
 
 void render_scanline(uint8_t ly) {
@@ -145,7 +93,7 @@ void render_scanline(uint8_t ly) {
                 int win_x = x - wx;
                 if (win_x < 0) continue;
 
-                uint16_t map_addr = win_map + ((ly - wy) / 8) * 32 + (win_x / 8);
+                uint16_t map_addr = win_map + (window_line_counter / 8) * 32 + (win_x / 8);
                 uint8_t tile = vram_read(map_addr);
 
                 uint16_t tile_addr;
@@ -155,7 +103,7 @@ void render_scanline(uint8_t ly) {
                     tile_addr = 0x8000 + tile * 16;
 
                 uint8_t pixel_x = win_x & 7;
-                uint8_t pixel_y = (ly - wy) & 7;
+                uint8_t pixel_y = window_line_counter & 7;
 
                 uint8_t byte0 = vram_read(tile_addr + pixel_y * 2);
                 uint8_t byte1 = vram_read(tile_addr + pixel_y * 2 + 1);
@@ -167,6 +115,7 @@ void render_scanline(uint8_t ly) {
                 bg_color[ly * 160 + x] = color;
             }
         }
+        if (wx < 160) window_line_counter++;
     }
 
     // Layer 3: Sprites
@@ -231,14 +180,33 @@ void render_scanline(uint8_t ly) {
         
     }
 
-    // // Per-scanline texture upload
-    // SDL_UpdateTexture(ppu_texture, &(SDL_Rect){0, ly, 160, 1},
-    //                   &framebuffer[ly * 160], 160 * sizeof(uint32_t));
+}
 
+static bool get_stat_line(uint8_t stat) {
+    uint8_t mode = stat & 0x03;
+    bool mode0 = (mode == 0) && (stat & 0x08);
+    bool mode1 = (mode == 1) && (stat & 0x10);
+    bool mode2 = (mode == 2) && (stat & 0x20);
+    bool lyc   = (stat & 0x04) && (stat & 0x40);
+    return mode0 || mode1 || mode2 || lyc;
+}
+
+static void sample_line_state(uint8_t ly) {
+    if (ly >= 144) { sprites_this_line = 0; return; }
+    int height = (memory->io[_LCDC - 0xFF00] & 0x04) ? 16 : 8;
+    int count = 0;
+    for (int i = 0; i < 40 && count < 10; i++) {
+        int sprite_y = memory->oam[i * 4] - 16;
+        if (ly >= sprite_y && ly < sprite_y + height)
+            count++;
+    }
+    sprites_this_line = count;
+    scx_sampled = memory->io[_SCX - 0xFF00] & 0x07;
 }
 
 void update_ppu(uint16_t cycles) {
     static uint32_t ppu_cycle = 0;
+    static uint8_t prev_ly = 0xFF;
 
     // Check LCD enable
     uint8_t lcdc = memory->io[_LCDC - 0xFF00];
@@ -246,13 +214,18 @@ void update_ppu(uint16_t cycles) {
         memory->io[_LY - 0xFF00] = 0;
         memory->io[_STAT - 0xFF00] &= 0xFC;
         ppu_cycle = 0;
+        prev_stat_line = false;
         return;
     }
 
     uint8_t ly = memory->io[_LY - 0xFF00];
+    if (ly != prev_ly && (lcdc & 0x80)) {
+        prev_ly = ly;
+        if (ly < 144) sample_line_state(ly);
+    }
     uint8_t lyc = memory->io[_LYC - 0xFF00];
     uint8_t stat = memory->io[_STAT - 0xFF00];
-    uint16_t scanline_cycles = double_speed ? 912 : 456;
+    uint16_t scanline_cycles = 456;
 
     ppu_cycle += cycles;
 
@@ -261,40 +234,38 @@ void update_ppu(uint16_t cycles) {
 
         if (ly < 144) {
             render_scanline(ly);
-            // HBlank STAT interrupt
-            if ((stat & 0x08) && (stat & 0x03) != 0) {
-                memory->io[_IF - 0xFF00] |= 0x02;
-            }
         }
 
         ++ly;
 
+        if (ly < 144) sample_line_state(ly);
+
         if (ly == 144) {
             memory->io[_IF - 0xFF00] |= 0x01;       // VBlank INT
             stat = (stat & 0xFC) | 0x01;             // set mode 1
-            if (stat & 0x10)
-                memory->io[_IF - 0xFF00] |= 0x02;    // STAT INT 
-            fps_counter();
+            SDL_UpdateTexture(ppu_texture, NULL, framebuffer, 160 * sizeof(uint32_t));
+            static uint32_t last_frame = 0;
+            uint32_t now = SDL_GetTicks();
+            uint32_t elapsed = now - last_frame;
+            if (elapsed < 16 && last_frame != 0)
+                SDL_Delay(16 - elapsed);
+            last_frame = SDL_GetTicks();
             SDL_RenderCopy(ppu_renderer, ppu_texture, NULL, NULL);
             SDL_RenderPresent(ppu_renderer);
         } else if (ly >= 145 && ly <= 153) {
             stat = (stat & 0xFC) | 0x01;              // Stay in VBlank
         } else if (ly == 154) {
             ly = 0;
-            stat = (stat & 0xFC) | 0x02;
-            if (stat & 0x20)
-                memory->io[_IF - 0xFF00] |= 0x02;
+            sample_line_state(0);
+            window_line_counter = 0;
+            stat = (stat & 0xFC) | 0x01;
         } else {
             stat = (stat & 0xFC) | 0x02;
-            if (stat & 0x20)
-                memory->io[_IF - 0xFF00] |= 0x02;             //set mode 2
         }
 
         if (ly == lyc) {
             if (!(stat & 0x04)) {
                 stat |= 0x04; // set ly == lyc
-                if (stat & 0x40)
-                    memory->io[_IF - 0xFF00] |= 0x02;  // STAT INT
             }
         } else {
             stat &= ~0x04;
@@ -306,43 +277,59 @@ void update_ppu(uint16_t cycles) {
     if (ly < 144 && (lcdc & 0x80)) {
         uint8_t old_mode = stat & 0x03;
         uint8_t new_mode;
-        uint16_t mode2_end = double_speed ? 160 : 80;
-        uint16_t mode3_end = double_speed ? 504 : 252;
+        uint16_t mode2_end = 80;
+        uint16_t mode3_base = 252;
+        uint16_t mode3_extra = scx_sampled + sprites_this_line * 6;
+        if ((lcdc & 0x20) && (lcdc & 0x01)) {
+            uint8_t wy = memory->io[_WY - 0xFF00];
+            int16_t wx = memory->io[_WX - 0xFF00] - 7;
+            if (ly >= wy && wx < 160)
+                mode3_extra += 6;
+        }
+        uint16_t mode3_end = mode3_base + mode3_extra;
 
         if (ppu_cycle < mode2_end)       new_mode = 2;  // OAM search
         else if (ppu_cycle < mode3_end)  new_mode = 3;  // Pixel transfer
         else                             new_mode = 0;  // HBlank
 
-        if (new_mode != old_mode) {
-            if ((new_mode == 0 && (stat & 0x08)) || (new_mode == 2 && (stat & 0x20))) 
-                memory->io[_IF - 0xFF00] |= 0x02;
-        }
-        stat = (stat & 0xFC) | new_mode;
+        if (new_mode != old_mode)
+            stat = (stat & 0xFC) | new_mode;
     }
 
     memory->io[_STAT - 0xFF00] = stat;
+
+    bool cur = get_stat_line(stat);
+    if (cur && !prev_stat_line)
+        memory->io[_IF - 0xFF00] |= 0x02;
+    prev_stat_line = cur;
 }
 
 void update_timers(uint16_t cycles) {
     static const uint8_t bitPos[] = {9, 3, 5, 7};
     uint8_t tac = memory->io[_TAC - 0xFF00];
-    uint32_t newClock = internalClock + cycles;
+    if (tima_overflow_cycles > 0) {
+        if (tima_overflow_cycles <= cycles) {
+            tima_overflow_cycles = 0;
+            if (!tima_write_during_overflow)
+                memory->io[_TIMA - 0xFF00] = memory->io[_TMA - 0xFF00];
+            memory->io[_IF - 0xFF00] |= 0x04;
+            tima_write_during_overflow = false;
+        } else {
+            tima_overflow_cycles -= cycles;
+        }
+    }
     if (tac & 0x04) {
         uint8_t bit = bitPos[tac & 0x03];
         uint16_t mask = 1 << bit;
         uint16_t period = mask << 1;
 
-        uint16_t ticks = newClock / period - internalClock / period;
-        for (uint16_t t = 0; t < ticks; t++) {
-            if (tima_overflow) {
-                memory->io[_TIMA - 0xFF00] = memory->io[_TMA - 0xFF00];
-                memory->io[_IF - 0xFF00] |= 0x04;
-                tima_overflow = false;
-            }
+        tima_accumulator += cycles;
+        while (tima_accumulator >= period) {
+            tima_accumulator -= period;
             uint8_t tima = memory->io[_TIMA - 0xFF00] + 1;
             if (tima == 0) {
                 tima = 0x00;
-                tima_overflow = true;
+                tima_overflow_cycles = 4;
             }
             memory->io[_TIMA - 0xFF00] = tima;
         }
@@ -359,9 +346,9 @@ void update_timers(uint16_t cycles) {
         }
     }
 
-    internalClock = newClock;
+    div_counter += cycles;
     update_ppu(cycles);
-    memory->io[_DIV - 0xff00] = (internalClock >> (double_speed ? 9 : 8)) & 0xFF;
+    memory->io[_DIV - 0xff00] = (div_counter >> 8) & 0xFF;
 }
 
 uint8_t read_byte(uint16_t address) {
@@ -414,8 +401,6 @@ uint8_t read_byte(uint16_t address) {
             return val;
         } else if (address == _NR52)
             return memory->io[_NR52 - 0xFF00];
-        else if (address == _KEY1)
-            return (memory->io[0x4D] & 0x81) | 0x7E;
         else 
             return memory->io[address - 0xFF00];
     } else if (address >= 0xFF80 && address <= 0xFFFE)
@@ -429,8 +414,6 @@ uint8_t read_byte(uint16_t address) {
 void save_byte(uint16_t address, uint8_t val){
     uint8_t stat_mode = memory->io[_STAT - 0xFF00] & 0x03;
     update_timers(4);
-    if (address < 0x0100) return;
-
     if (address <= 0x3FFF) {
         if (memory->cart_type == CART_MBC2) {
             if (address & 0x0100) {
@@ -538,15 +521,21 @@ void save_byte(uint16_t address, uint8_t val){
     } else if (address >= 0xE000 && address <= 0xFDFF) {
         memory->wram[address - 0xE000] = val;
     } else if (address >= 0xFE00 && address <= 0xFE9F) {
-        if (stat_mode < 2)
+        if (stat_mode == 2) {
+            size_t offset = address - 0xFE00;
+            size_t base = offset & 0xFE;
+            memory->oam[base] = val;
+            memory->oam[base | 1] = val;
+        } else if (stat_mode < 2) {
             memory->oam[address - 0xFE00] = val;
+        }
     } else if (address >= 0xFF00 && address <= 0xFF7F){
-        if (address == _DIV) internalClock = 0;
+        if (address == _DIV) div_counter = 0;
         else if (address == _LY) return;
-        
         else if (address == _JOYP) memory->io[0] = val & 0x30;
         else if (address == _TIMA) {
-            tima_overflow = false;
+            if (tima_overflow_cycles > 0)
+                tima_write_during_overflow = true;
             memory->io[_TIMA - 0xFF00] = val;
         } else if (address == _NR52) {
             memory->io[_NR52 - 0xFF00] = (memory->io[_NR52 - 0xFF00] & 0x0F) | (val & 0xF0);
@@ -572,19 +561,21 @@ void save_byte(uint16_t address, uint8_t val){
                 memcpy(memory->oam, memory->wram + (src - 0xE000), 0xA0);
             }
             for (int i = 0; i < 0xa0; ++i) update_timers(4);
-        } else if (address == _STAT)
+        } else if (address == _STAT) {
             memory->io[_STAT - 0xFF00] = (val & 0x78) | (memory->io[_STAT - 0xFF00] & 0x07);
-        else if (address == _KEY1)
-            memory->io[_KEY1 - 0xFF00] = (memory->io[_KEY1 - 0xFF00] & 0x80) | (val & 1);
-        else if (address == _NR14 || address == _NR24 || address == _NR33 || address == _NR44) {
+            uint8_t s = memory->io[_STAT - 0xFF00];
+            bool cur = get_stat_line(s);
+            if (cur && !prev_stat_line)
+                memory->io[_IF - 0xFF00] |= 0x02;
+            prev_stat_line = cur;
+        }         else if (address == _NR14 || address == _NR24 || address == _NR33 || address == _NR44) {
             if (val & 0x80) {
-                static const uint8_t ch_map[] = {0, 1, 2, 3};
                 static const uint16_t len_map[] = {_NR11, _NR21, _NR31, _NR41};
                 int idx = (address == _NR14) ? 0 : (address == _NR24) ? 1 : (address == _NR33) ? 2 : 3;
                 uint8_t len_data = memory->io[len_map[idx] - 0xFF00] & 0x3F;
                 uint8_t ticks = 64 - len_data;
                 if (val & 0x40)
-                    memory->apu_ch_remaining[idx] = ticks * (double_speed ? 32768u : 16384u);
+                    memory->apu_ch_remaining[idx] = ticks * 16384u;
                 else
                     memory->apu_ch_remaining[idx] = 0xFFFFFFFF; // no length, always on
                 memory->io[_NR52 - 0xFF00] |= (1 << idx);
@@ -606,7 +597,6 @@ void init_io_ports(void) {
     memory->io[_JOYP - 0xFF00] = 0x30;
 
     memory->io[_STAT - 0xFF00] = 0x00;
-    memory->io[_KEY1 - 0xFF00] = 0x00;
 
     memory->io[_TIMA - 0xFF00] = 0x00;
     memory->io[_TMA  - 0xFF00] = 0x00;
@@ -1396,8 +1386,8 @@ void HALT() {
         while (!(memory->io[_IF - 0xFF00] & memory->ie))
             update_timers(4);
         handle_interrupts();
-    } else if (!(memory->io[_IF - 0xFF00] & 0x1F)) {
-        while (!(memory->io[_IF - 0xFF00] & 0x1F))
+    } else if (!(memory->io[_IF - 0xFF00] & memory->ie & 0x1F)) {
+        while (!(memory->io[_IF - 0xFF00] & memory->ie & 0x1F))
             update_timers(4);
     } else 
         halt_bug = true;
@@ -1406,17 +1396,11 @@ void HALT() {
 void STOP() {
     ++reg->pc;
     
-    uint8_t key1 = memory->io[_KEY1 - 0xFF00];
-    if (key1 & 0x01) {
-        double_speed = !double_speed;
-        memory->io[_KEY1 - 0xFF00] = double_speed ? 0x01 : 0x00;
-        return;
-    }
     if (ime) {
         while (!(memory->io[_IF - 0xFF00] & memory->ie))
             update_timers(4);
     } else {
-        while (!(memory->io[_IF - 0xFF00] & 0x1F))
+        while (!(memory->io[_IF - 0xFF00] & memory->ie & 0x1F))
             update_timers(4);
     }
 }
