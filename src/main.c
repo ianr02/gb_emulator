@@ -1,13 +1,11 @@
-#include "instructions.h"
-
-extern GameBoyMemory *memory;
-extern registers *reg;
+#include "cpu/cpu_instructions.h"
+#include "core/emulator_core.h"
+#include "ppu/ppu.h"
 
 SDL_Window   *ppu_window;
 SDL_Renderer *ppu_renderer;
 SDL_Texture  *ppu_texture;
 
-uint8_t opcode;
 uint8_t joypad_dpad = 0x0F; 
 uint8_t joypad_btn  = 0x0F; 
 char savepath[256];

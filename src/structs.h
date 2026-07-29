@@ -146,24 +146,4 @@ typedef struct {
     uint16_t pc;
 } registers;
 
-extern const uint32_t shades[4];
-
-GameBoyMemory *memory;
-registers *reg;
-
-uint32_t div_counter = 0;
-uint32_t tima_accumulator = 0;
-int8_t ime_next = -1;
-bool ei = false, ime = false;
-
-bool prefix_flag = false;
-bool halt_bug = false;
-// DMG only — no double speed
-uint16_t tima_overflow_cycles = 0;
-bool tima_write_during_overflow = false;
-bool prev_stat_line = false;
-uint8_t sprites_this_line = 0;
-uint8_t scx_sampled = 0;
-uint8_t window_line_counter = 0;
-
 #endif
