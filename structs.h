@@ -86,6 +86,8 @@
 typedef void (*instruction_ptr)(void);
 
 typedef struct __attribute__((packed)){
+    uint32_t apu_ch_remaining[4];
+
     uint8_t rom[0x800000];    // 8MB Cartridge covers up to MBC5
     uint8_t vram[0x2000];   // 8KB Video RAM
     uint8_t external[0x20000]; // 128KB covers MBC5

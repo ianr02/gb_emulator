@@ -283,6 +283,18 @@ void update_timers(uint16_t cycles) {
             memory->io[_TIMA - 0xFF00] = tima;
         }
     }
+
+    for (int ch = 0; ch < 4; ch++) {
+        if (memory->apu_ch_remaining[ch] > 0 && memory->apu_ch_remaining[ch] != 0xFFFFFFFF) {
+            if (memory->apu_ch_remaining[ch] <= cycles) {
+                memory->apu_ch_remaining[ch] = 0;
+                memory->io[_NR52 - 0xFF00] &= ~(1 << ch);
+            } else {
+                memory->apu_ch_remaining[ch] -= cycles;
+            }
+        }
+    }
+
     internalClock = newClock;
     update_ppu(cycles);
     memory->io[_DIV - 0xff00] = (internalClock >> (double_speed ? 9 : 8)) & 0xFF;
@@ -335,7 +347,7 @@ uint8_t read_byte(uint16_t address) {
     
             return val;
         } else if (address == _NR52)
-            return memory->io[_NR52 - 0xFF00] & 0xF0;
+            return memory->io[_NR52 - 0xFF00];
         else if (address == _KEY1)
             return (memory->io[0x4D] & 0x81) | 0x7E;
         else 
@@ -464,7 +476,11 @@ void save_byte(uint16_t address, uint8_t val){
         if (address == _DIV) internalClock = 0;
         else if (address == _LY) return;
         else if (address == _JOYP) memory->io[0] = val & 0x30;
-        else if (address == _NR52) memory->io[_NR52 - 0xFF00] = val & 0xF0;
+        else if (address == _NR52) {
+            memory->io[_NR52 - 0xFF00] = (memory->io[_NR52 - 0xFF00] & 0x0F) | (val & 0xF0);
+            if (!(val & 0x80)) 
+                for (int i = 0; i < 4; i++) memory->apu_ch_remaining[i] = 0;
+        }
         else if (address == _LCDC) {
             memory->io[_LCDC - 0xFF00] = val;
             if (!(val & 0x80)) {
@@ -489,6 +505,21 @@ void save_byte(uint16_t address, uint8_t val){
             memory->io[_STAT - 0xFF00] = (val & 0x78) | (memory->io[_STAT - 0xFF00] & 0x07);
         else if (address == _KEY1)
             memory->io[_KEY1 - 0xFF00] = (memory->io[_KEY1 - 0xFF00] & 0x80) | (val & 1);
+        else if (address == _NR14 || address == _NR24 || address == _NR33 || address == _NR44) {
+            if (val & 0x80) {
+                static const uint8_t ch_map[] = {0, 1, 2, 3};
+                static const uint16_t len_map[] = {_NR11, _NR21, _NR31, _NR41};
+                int idx = (address == _NR14) ? 0 : (address == _NR24) ? 1 : (address == _NR33) ? 2 : 3;
+                uint8_t len_data = memory->io[len_map[idx] - 0xFF00] & 0x3F;
+                uint8_t ticks = 64 - len_data;
+                if (val & 0x40)
+                    memory->apu_ch_remaining[idx] = ticks * (double_speed ? 32768u : 16384u);
+                else
+                    memory->apu_ch_remaining[idx] = 0xFFFFFFFF; // no length, always on
+                memory->io[_NR52 - 0xFF00] |= (1 << idx);
+            }
+            memory->io[address - 0xFF00] = val;
+        }
         else 
             memory->io[address - 0xFF00] = val;
     } else if (address >= 0xFF80 && address <= 0xFFFE){
