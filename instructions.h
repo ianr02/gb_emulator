@@ -475,15 +475,6 @@ void save_byte(uint16_t address, uint8_t val){
     } else if (address >= 0xFF00 && address <= 0xFF7F){
         if (address == _DIV) internalClock = 0;
         else if (address == _LY) return;
-        else if (address == 0xFF02) {
-    memory->io[0xFF02 - 0xFF00] = val & 0x81;
-    if (val & 0x80) {
-        uint8_t sb = memory->io[0xFF01 - 0xFF00];
-        putchar(sb);
-        fflush(stdout);
-        memory->io[0xFF02 - 0xFF00] &= ~0x80;
-    }
-}
         else if (address == _JOYP) memory->io[0] = val & 0x30;
         else if (address == _NR52) {
             memory->io[_NR52 - 0xFF00] = (memory->io[_NR52 - 0xFF00] & 0x0F) | (val & 0xF0);
@@ -557,24 +548,24 @@ void init_io_ports(void) {
     save_byte(_NR10, 0x80);
     save_byte(_NR11, 0xBF);
     save_byte(_NR12, 0xF3);
-    save_byte(_NR14, 0xBF);
+    save_byte(_NR14, 0x3F);
     
     // Audio Defaults (Channel 2)
     save_byte(_NR21, 0x3F);
     save_byte(_NR22, 0x0);
-    save_byte(_NR24, 0xBF);
+    save_byte(_NR24, 0x3F);
 
     // Audio Defaults (Channel 3)
     save_byte(_NR30, 0x7F);
     save_byte(_NR31, 0xFF);
     save_byte(_NR32, 0x9F);
-    save_byte(_NR33, 0xBF);
+    save_byte(_NR33, 0x3F);
 
     // Audio Channel 4 & Master Controls
     save_byte(_NR41, 0xFF);
     save_byte(_NR42, 0x00);
     save_byte(_NR43, 0x00);
-    save_byte(_NR44, 0xBF);
+    save_byte(_NR44, 0x3F);
 
     save_byte(_NR50, 0x77);
     save_byte(_NR51, 0xF3);
