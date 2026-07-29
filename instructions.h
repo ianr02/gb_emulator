@@ -40,6 +40,7 @@ void fps_counter(){
         fps_display = fps_count;
         fps_count = 0;
         last_fps_time = now_fps;
+        printf( "FPS: %d\n", fps_display);
     }
     if (fps_display > 0) {
         char buf[8];
@@ -71,6 +72,13 @@ void fps_counter(){
         int fps_w = len * 6;
         SDL_UpdateTexture(ppu_texture, &(SDL_Rect){160 - fps_w - 2, start_y, fps_w, 5},
             &framebuffer[start_y * 160 + (160 - fps_w - 2)], 160 * sizeof(uint32_t));
+            static uint32_t last_frame = 0;
+        uint32_t now = SDL_GetTicks();
+        uint32_t elapsed = now - last_frame;
+        if (elapsed < 16) {
+            SDL_Delay(16 - elapsed);
+        }
+        last_frame = SDL_GetTicks();
     }
 }
 
