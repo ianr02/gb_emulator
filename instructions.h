@@ -22,6 +22,8 @@ const uint32_t shades[4] = {
     0x000000   // black
 };
 
+bool tima_overflow; 
+
 void prefix_function();
 
 static inline uint8_t vram_read(uint16_t addr) {
@@ -40,7 +42,6 @@ void fps_counter(){
         fps_display = fps_count;
         fps_count = 0;
         last_fps_time = now_fps;
-        printf("FPS: %d\n", fps_display);
     }
     if (fps_display > 0) {
         char buf[8];
@@ -333,10 +334,15 @@ void update_timers(uint16_t cycles) {
 
         uint16_t ticks = newClock / period - internalClock / period;
         for (uint16_t t = 0; t < ticks; t++) {
+            if (tima_overflow) {
+                memory->io[_TIMA - 0xFF00] = memory->io[_TMA - 0xFF00];
+                memory->io[_IF - 0xFF00] |= 0x04;
+                tima_overflow = false;
+            }
             uint8_t tima = memory->io[_TIMA - 0xFF00] + 1;
             if (tima == 0) {
-                tima = memory->io[_TMA - 0xFF00];
-                memory->io[_IF - 0xFF00] |= 0x04;
+                tima = 0x00;
+                tima_overflow = true;
             }
             memory->io[_TIMA - 0xFF00] = tima;
         }
@@ -470,9 +476,9 @@ void save_byte(uint16_t address, uint8_t val){
          switch (memory->cart_type) {
             case CART_MBC1:
                 if (memory->banking_mode == 0)
-                    memory->ram_bank = val & 0x03;
-                else
                     memory->rom_bank = (memory->rom_bank & 0x1F) | ((val & 0x03) << 5);
+                else
+                    memory->ram_bank = val & 0x03;
                 break;
             case CART_MBC3:
                 memory->ram_bank = val & 0x0F;
@@ -537,13 +543,16 @@ void save_byte(uint16_t address, uint8_t val){
     } else if (address >= 0xFF00 && address <= 0xFF7F){
         if (address == _DIV) internalClock = 0;
         else if (address == _LY) return;
+        
         else if (address == _JOYP) memory->io[0] = val & 0x30;
-        else if (address == _NR52) {
+        else if (address == _TIMA) {
+            tima_overflow = false;
+            memory->io[_TIMA - 0xFF00] = val;
+        } else if (address == _NR52) {
             memory->io[_NR52 - 0xFF00] = (memory->io[_NR52 - 0xFF00] & 0x0F) | (val & 0xF0);
             if (!(val & 0x80)) 
                 for (int i = 0; i < 4; i++) memory->apu_ch_remaining[i] = 0;
-        }
-        else if (address == _LCDC) {
+        } else if (address == _LCDC) {
             memory->io[_LCDC - 0xFF00] = val;
             if (!(val & 0x80)) {
                 memory->io[_LY - 0xFF00] = 0;
