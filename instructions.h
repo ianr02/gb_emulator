@@ -40,7 +40,7 @@ void fps_counter(){
         fps_display = fps_count;
         fps_count = 0;
         last_fps_time = now_fps;
-        fprintf(stderr, "FPS: %d\n", fps_display);
+        printf("FPS: %d\n", fps_display);
     }
     if (fps_display > 0) {
         char buf[8];
@@ -230,9 +230,9 @@ void render_scanline(uint8_t ly) {
         
     }
 
-    // Per-scanline texture upload
-    SDL_UpdateTexture(ppu_texture, &(SDL_Rect){0, ly, 160, 1},
-                      &framebuffer[ly * 160], 160 * sizeof(uint32_t));
+    // // Per-scanline texture upload
+    // SDL_UpdateTexture(ppu_texture, &(SDL_Rect){0, ly, 160, 1},
+    //                   &framebuffer[ly * 160], 160 * sizeof(uint32_t));
 
 }
 
