@@ -13,6 +13,8 @@ uint8_t joypad_btn  = 0x0F;
 char savepath[256];
 size_t save_size;
 
+uint32_t frame_counter = 0;
+
 void exit_game();
 
 int main(int argc, char *argv[]) {
@@ -151,6 +153,13 @@ int main(int argc, char *argv[]) {
             } else 
                 ime_next--;
         }
+        static uint32_t next_frame = 0;
+        if (next_frame == 0) next_frame = SDL_GetTicks();
+        uint32_t now = SDL_GetTicks();
+        if (now < next_frame) {
+            SDL_Delay(next_frame - now);
+        }
+        next_frame += 16;
     }
     exit_game();
     exit(EXIT_SUCCESS);

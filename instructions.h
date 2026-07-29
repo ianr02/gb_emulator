@@ -30,6 +30,50 @@ static inline uint8_t vram_read(uint16_t addr) {
     return 0xFF;
 }
 
+void fps_counter(){
+    static uint32_t last_fps_time = 0;
+    static int fps_count = 0;
+    static uint32_t fps_display = 0;
+    uint32_t now_fps = SDL_GetTicks();
+    fps_count++;
+    if (now_fps - last_fps_time >= 1000) {
+        fps_display = fps_count;
+        fps_count = 0;
+        last_fps_time = now_fps;
+    }
+    if (fps_display > 0) {
+        char buf[8];
+        snprintf(buf, sizeof(buf), "%u", fps_display);
+        int len = strlen(buf);
+        int start_x = 160 - len * 6 - 2;
+        int start_y = 2;
+        const uint8_t digits[10][5] = {
+            {0x7E,0x81,0x81,0x81,0x7E},{0x02,0x42,0xFE,0x42,0x02},
+            {0x46,0x89,0x91,0xA1,0x46},{0x42,0x81,0x91,0xA9,0x46},
+            {0x18,0x28,0x48,0xFE,0x08},{0xF2,0x91,0x91,0x91,0x8E},
+            {0x3E,0x51,0x91,0x91,0x4E},{0x80,0x87,0x88,0x90,0xE0},
+            {0x6E,0x91,0x91,0x91,0x6E},{0x72,0x89,0x89,0x89,0x7E}
+        };
+        for (int i = 0; i < len; i++) {
+            int d = buf[i] - '0';
+            if (d < 0 || d > 9) continue;
+            for (int row = 0; row < 5 && start_y + row < 144; row++) {
+                for (int col = 0; col < 5; col++) {
+                    int x = start_x + i * 6 + col;
+                    int y = start_y + row;
+                    if (x >= 0 && x < 160) {
+                        framebuffer[y * 160 + x] =
+                            (digits[d][row] & (1 << (4 - col))) ? 0xFFFFFF : 0x000000;
+                    }
+                }
+            }
+        }
+        int fps_w = len * 6;
+        SDL_UpdateTexture(ppu_texture, &(SDL_Rect){160 - fps_w - 2, start_y, fps_w, 5},
+            &framebuffer[start_y * 160 + (160 - fps_w - 2)], 160 * sizeof(uint32_t));
+    }
+}
+
 void render_scanline(uint8_t ly) {
     uint8_t lcdc = memory->io[_LCDC - 0xFF00];
 
@@ -207,25 +251,22 @@ void update_ppu(uint16_t cycles) {
     while (ppu_cycle >= scanline_cycles) {
         ppu_cycle -= scanline_cycles;
 
-        if (ly < 144)
+        if (ly < 144) {
             render_scanline(ly);
-        ly++;
-
-        if (ly == lyc) {
-            if (!(stat & 0x04)) {
-                stat |= 0x04; // set ly == lyc
-                if (stat & 0x40)
-                    memory->io[_IF - 0xFF00] |= 0x02;  // STAT INT
+            // HBlank STAT interrupt
+            if ((stat & 0x08) && (stat & 0x03) != 0) {
+                memory->io[_IF - 0xFF00] |= 0x02;
             }
-        } else {
-            stat &= ~0x04;
         }
+
+        ++ly;
 
         if (ly == 144) {
             memory->io[_IF - 0xFF00] |= 0x01;       // VBlank INT
             stat = (stat & 0xFC) | 0x01;             // set mode 1
             if (stat & 0x10)
                 memory->io[_IF - 0xFF00] |= 0x02;    // STAT INT 
+            fps_counter();
             SDL_RenderCopy(ppu_renderer, ppu_texture, NULL, NULL);
             SDL_RenderPresent(ppu_renderer);
         } else if (ly >= 145 && ly <= 153) {
@@ -239,6 +280,16 @@ void update_ppu(uint16_t cycles) {
             stat = (stat & 0xFC) | 0x02;
             if (stat & 0x20)
                 memory->io[_IF - 0xFF00] |= 0x02;             //set mode 2
+        }
+
+        if (ly == lyc) {
+            if (!(stat & 0x04)) {
+                stat |= 0x04; // set ly == lyc
+                if (stat & 0x40)
+                    memory->io[_IF - 0xFF00] |= 0x02;  // STAT INT
+            }
+        } else {
+            stat &= ~0x04;
         }
 
         memory->io[_LY - 0xFF00] = ly;
@@ -301,6 +352,7 @@ void update_timers(uint16_t cycles) {
 }
 
 uint8_t read_byte(uint16_t address) {
+    uint8_t stat_mode = memory->io[_STAT - 0xFF00] & 0x03;
     update_timers(4);
     if (address <= 0x3FFF) {
         return memory->rom[address];
@@ -308,7 +360,7 @@ uint8_t read_byte(uint16_t address) {
         uint8_t rval = memory->rom[(memory->rom_bank * 0x4000) + (address - 0x4000)];
         return rval;
     } else if (address >= 0x8000 && address <= 0x9FFF) {
-        if ((memory->io[_STAT - 0xFF00] & 0x03) == 3) return 0xFF;
+        if (stat_mode == 3) return 0xFF;
         return memory->vram[address - 0x8000];
     } else if (address >= 0xA000 && address <= 0xBFFF) {
         switch (memory->cart_type) {
@@ -336,7 +388,7 @@ uint8_t read_byte(uint16_t address) {
     } else if (address >= 0xE000 && address <= 0xFDFF) {
         return memory->wram[address - 0xE000];
     } else if (address >= 0xFE00 && address <= 0xFE9F) {
-        if ((memory->io[_STAT - 0xFF00] & 0x03) >= 2) return 0xFF;
+        if (stat_mode >= 2) return 0xFF;
         return memory->oam[address - 0xFE00];
     } else if (address >= 0xFF00 && address <= 0xFF7F){
         if (address == _JOYP) {
@@ -362,7 +414,8 @@ uint8_t read_byte(uint16_t address) {
 }
 
 void save_byte(uint16_t address, uint8_t val){
-    update_timers(4) ;
+    uint8_t stat_mode = memory->io[_STAT - 0xFF00] & 0x03;
+    update_timers(4);
     if (address < 0x0100) return;
 
     if (address <= 0x3FFF) {
@@ -446,7 +499,7 @@ void save_byte(uint16_t address, uint8_t val){
             default: break;
         }
     } else if (address >= 0x8000 && address <= 0x9FFF) {
-        if ((memory->io[_STAT - 0xFF00] & 0x03) != 3)
+        if (stat_mode != 3)
             memory->vram[address - 0x8000] = val;
     } else if (address >= 0xA000 && address <= 0xBFFF) {
         if (memory->ram_enable) {
@@ -472,7 +525,7 @@ void save_byte(uint16_t address, uint8_t val){
     } else if (address >= 0xE000 && address <= 0xFDFF) {
         memory->wram[address - 0xE000] = val;
     } else if (address >= 0xFE00 && address <= 0xFE9F) {
-        if ((memory->io[_STAT - 0xFF00] & 0x03) < 2)
+        if (stat_mode < 2)
             memory->oam[address - 0xFE00] = val;
     } else if (address >= 0xFF00 && address <= 0xFF7F){
         if (address == _DIV) internalClock = 0;
@@ -1563,6 +1616,7 @@ void JR_COND() {
         reg->pc = (uint16_t)((int32_t)reg->pc + val);
         update_timers(4);
     } else {
+        ++reg->pc;
         update_timers(4);
     }
 } 
