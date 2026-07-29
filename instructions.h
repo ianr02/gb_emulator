@@ -534,59 +534,50 @@ void save_byte(uint16_t address, uint8_t val){
 }
 
 void init_io_ports(void) {
-    // Input Default
-    save_byte(_JOYP, 0x30);
+    memory->io[_JOYP - 0xFF00] = 0x30;
 
-    save_byte(_LY,   0x00);
-    save_byte(_STAT, 0x00);
-    save_byte(_KEY1, 0x00);
+    memory->io[_STAT - 0xFF00] = 0x00;
+    memory->io[_KEY1 - 0xFF00] = 0x00;
 
-    // Timer Defaults
-    save_byte(_TIMA, 0x0);
-    save_byte(_TMA, 0x0);
-    save_byte(_TAC, 0x0);
+    memory->io[_TIMA - 0xFF00] = 0x00;
+    memory->io[_TMA  - 0xFF00] = 0x00;
+    memory->io[_TAC  - 0xFF00] = 0x00;
 
-    // Audio Defaults (Channel 1)
-    save_byte(_NR10, 0x80);
-    save_byte(_NR11, 0xBF);
-    save_byte(_NR12, 0xF3);
-    save_byte(_NR14, 0x3F);
-    
-    // Audio Defaults (Channel 2)
-    save_byte(_NR21, 0x3F);
-    save_byte(_NR22, 0x0);
-    save_byte(_NR24, 0x3F);
+    memory->io[_NR10 - 0xFF00] = 0x80;
+    memory->io[_NR11 - 0xFF00] = 0xBF;
+    memory->io[_NR12 - 0xFF00] = 0xF3;
+    memory->io[_NR14 - 0xFF00] = 0x3F;
 
-    // Audio Defaults (Channel 3)
-    save_byte(_NR30, 0x7F);
-    save_byte(_NR31, 0xFF);
-    save_byte(_NR32, 0x9F);
-    save_byte(_NR33, 0x3F);
+    memory->io[_NR21 - 0xFF00] = 0x3F;
+    memory->io[_NR22 - 0xFF00] = 0x00;
+    memory->io[_NR24 - 0xFF00] = 0x3F;
 
-    // Audio Channel 4 & Master Controls
-    save_byte(_NR41, 0xFF);
-    save_byte(_NR42, 0x00);
-    save_byte(_NR43, 0x00);
-    save_byte(_NR44, 0x3F);
+    memory->io[_NR30 - 0xFF00] = 0x7F;
+    memory->io[_NR31 - 0xFF00] = 0xFF;
+    memory->io[_NR32 - 0xFF00] = 0x9F;
+    memory->io[_NR33 - 0xFF00] = 0x3F;
 
-    save_byte(_NR50, 0x77);
-    save_byte(_NR51, 0xF3);
-    save_byte(_NR52, 0xF1); 
+    memory->io[_NR41 - 0xFF00] = 0xFF;
+    memory->io[_NR42 - 0xFF00] = 0x00;
+    memory->io[_NR43 - 0xFF00] = 0x00;
+    memory->io[_NR44 - 0xFF00] = 0x3F;
 
-    // Video / PPU
-    save_byte(_LCDC, 0x91);
-    save_byte(_SCY,  0x00);
-    save_byte(_SCX,  0x00);
-    save_byte(_LYC,  0x00);
-    save_byte(_BGP,  0xFC);
-    save_byte(_OBP0, 0xFF);
-    save_byte(_OBP1, 0xFF);
-    save_byte(_WY,   0x00);
-    save_byte(_WX,   0x00);
+    memory->io[_NR50 - 0xFF00] = 0x77;
+    memory->io[_NR51 - 0xFF00] = 0xF3;
+    memory->io[_NR52 - 0xFF00] = 0xF0;
 
-    // Interrupt Enable
-    save_byte(_IF,   0x00);
-    save_byte(_IE,   0x00);
+    memory->io[_LCDC - 0xFF00] = 0x91;
+    memory->io[_SCY  - 0xFF00] = 0x00;
+    memory->io[_SCX  - 0xFF00] = 0x00;
+    memory->io[_LYC  - 0xFF00] = 0x00;
+    memory->io[_BGP  - 0xFF00] = 0xFC;
+    memory->io[_OBP0 - 0xFF00] = 0xFF;
+    memory->io[_OBP1 - 0xFF00] = 0xFF;
+    memory->io[_WY   - 0xFF00] = 0x00;
+    memory->io[_WX   - 0xFF00] = 0x00;
+
+    memory->io[_IF   - 0xFF00] = 0x00;
+    memory->ie                  = 0x00;
 }
 
 void handle_interrupts() {
@@ -1235,7 +1226,6 @@ void INC_REG_hl() {
     save_byte(reg->hl, val);  
     if (val == 0) 
         reg->f |= 0x80; 
-    update_timers(12);
 }
 
 // DEC value in [hl]
@@ -1249,7 +1239,6 @@ void DEC_REG_hl() {
     save_byte(reg->hl, val);
     if(val == 0)
         reg->f |= 0x80;
-    update_timers(12);
 }
 
 // add immediate value to stack pointer
