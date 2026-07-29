@@ -23,11 +23,12 @@ int main(int argc, char *argv[]) {
     memory = calloc(1, sizeof(GameBoyMemory));
     reg = malloc(sizeof(registers));
     init_io_ports();
+    bool is_cgb = (memory->rom[0x0143] & 0x80) != 0; // check for dmg or cgb
     reg->pc = INIT_PC;
-    reg->af = 0x01B0;
-    reg->bc = 0x0013;
-    reg->de = 0x00D8;
-    reg->hl = 0x014D;
+    reg->af = is_cgb ? 0x11B0 : 0x01B0;
+    reg->bc = is_cgb ? 0x0000 : 0x0013;
+    reg->de = is_cgb ? 0x0000 : 0x00D8;
+    reg->hl = is_cgb ? 0x0000 : 0x014D;
     reg->sp = 0xFFFE; 
 
     int fd = open(argv[1], O_RDONLY);
