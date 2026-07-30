@@ -113,6 +113,8 @@ int main(int argc, char *argv[]) {
     if (audio_dev > 0) SDL_PauseAudioDevice(audio_dev, 0);
 
     bool go = true;
+    uint8_t prev_final = 0;
+    int frame_count = 0;
     while(go){
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
@@ -146,6 +148,16 @@ int main(int argc, char *argv[]) {
             opcode_table[opcode]();
         } else {
             exit(EXIT_FAILURE);
+        }
+
+        if (memory->external[0] != prev_final) {
+            if (prev_final != 0) {
+                printf("TEST RESULT: %d\n", memory->external[0]);
+                char *text = (char*)&memory->external[4];
+                if (text[0]) printf("OUTPUT: %s\n", text);
+                fflush(stdout);
+            }
+            prev_final = memory->external[0];
         }
 
         if (ime_next >= 0) {

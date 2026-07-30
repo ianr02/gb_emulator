@@ -182,7 +182,7 @@ void bus_write(uint16_t address, uint8_t val) {
         oam_write(address, val);
         return;
     } else if (address >= 0xFF00 && address <= 0xFF7F){
-        if (address == _DIV) { div_counter = 0; apu->system_divider = 0; }
+        if (address == _DIV) { div_counter = 0; apu_div_write(); }
         else if (address == _JOYP) memory->io[0] = val & 0x30;
         else if (address == _TIMA) {
             if (tima_overflow_cycles > 0)
