@@ -7,12 +7,17 @@ set (CMAKE_C_STANDARD_REQUIRED ON)
 
 find_package(SDL2 REQUIRED)
 
-add_executable(main
+add_executable(emulator
     src/main.c
     core/emulator_core.c
+    core/bus.c
+    core/dma.c
+    core/oam.c
     ppu/ppu.c
+    ppu/ppu_memory.c
     cpu/cpu_instructions.c
+    apu/apu.c
 )
 
-target_include_directories(main PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(main PRIVATE SDL2::SDL2)
+target_include_directories(emulator PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(emulator PRIVATE SDL2::SDL2)

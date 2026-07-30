@@ -38,24 +38,27 @@
 #define _NR10 0xFF10
 #define _NR11 0xFF11
 #define _NR12 0xFF12
+#define _NR13 0xFF13
 #define _NR14 0xFF14
 
 // Audio Registers (Sound Channel 2)
 #define _NR21 0xFF16
 #define _NR22 0xFF17
+#define _NR23 0xFF18
 #define _NR24 0xFF19
 
 // Audio Registers (Sound Channel 3)
 #define _NR30 0xFF1A
 #define _NR31 0xFF1B
 #define _NR32 0xFF1C
-#define _NR33 0xFF1E
+#define _NR33 0xFF1D
+#define _NR34 0xFF1E
 
 // Audio Registers (Sound Channel 4)
 #define _NR41 0xFF20
 #define _NR42 0xFF21
 #define _NR43 0xFF22
-#define _NR44 0xFF23 // Note: $FF23 is actually NR44 on real hardware
+#define _NR44 0xFF23
 
 // Audio Control Registers
 #define _NR50 0xFF24
@@ -83,8 +86,6 @@
 typedef void (*instruction_ptr)(void);
 
 typedef struct __attribute__((packed)){
-    uint32_t apu_ch_remaining[4];
-
     uint8_t rom[0x800000];    // 8MB Cartridge covers up to MBC5
     uint8_t vram[0x2000];   // 8KB Video RAM
     uint8_t external[0x20000]; // 128KB covers MBC5

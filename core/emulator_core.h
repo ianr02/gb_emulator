@@ -2,6 +2,7 @@
 #define EMULATOR_CORE_H
 
 #include "src/structs.h"
+#include "apu/apu.h"
 
 extern GameBoyMemory *memory;
 extern registers *reg;
