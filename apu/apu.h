@@ -4,7 +4,7 @@
 #include "src/structs.h"
 
 #define AUDIO_SAMPLE_RATE 44100
-#define AUDIO_CYCLES_PER_SAMPLE (4194304 / AUDIO_SAMPLE_RATE)
+#define AUDIO_CYCLES_PER_SAMPLE (4194304 / 44100)
 #define AUDIO_BUFFER_SAMPLES 4096
 
 typedef struct {

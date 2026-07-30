@@ -50,16 +50,18 @@ uint8_t bus_read(uint16_t address) {
         else {
             uint16_t idx = address - 0xFF00;
             uint8_t val = memory->io[idx];
-            switch (address) {
-                case _NR10: return 0x80 | (val & 0x7F);
-                case _NR11: return (val & 0xC0) | 0x3F;
-                case _NR14: return (val & 0x07) | 0xF8;
-                case _NR24: return (val & 0x07) | 0xF8;
-                case _NR34: return (val & 0x07) | 0xF8;
-                case _NR44: return (val & 0x07) | 0xF8;
-                case _NR52: return val | 0x70;
-                default: return val;
+            if (address >= 0xFF10 && address <= 0xFF2F) {
+                static const uint8_t masks[32] = {
+                    0x80, 0x3F, 0x00, 0xFF, 0xBF, // NR10-NR14
+                    0xFF, 0x3F, 0x00, 0xFF, 0xBF, // 0xFF15-NR24
+                    0x7F, 0xFF, 0x9F, 0xFF, 0xBF, // NR30-NR34
+                    0xFF, 0xFF, 0x00, 0x00, 0xBF, // 0xFF1F-NR44
+                    0x00, 0x00, 0x70,              // NR50-NR52
+                    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF // 0xFF27-0xFF2F
+                };
+                return val | masks[idx - 0x10];
             }
+            return val;
         }
     } else if (address >= 0xFF80 && address <= 0xFFFE)
         return memory->hram[address - 0xFF80];

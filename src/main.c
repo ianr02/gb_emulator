@@ -163,6 +163,22 @@ int main(int argc, char *argv[]) {
             uint16_t n = apu_read_samples(buf, 256);
             if (n > 0)
                 SDL_QueueAudio(audio_dev, buf, n * 4);
+
+            static uint32_t last_sync_time = 0;
+            static uint32_t last_sync_div = 0;
+            if (last_sync_time == 0) {
+                last_sync_time = SDL_GetTicks();
+                last_sync_div = div_counter;
+            } else {
+                uint32_t now = SDL_GetTicks();
+                uint32_t delta_time = now - last_sync_time;
+                uint32_t delta_div  = div_counter - last_sync_div;
+                uint32_t expected_delta = delta_div * 1000 / 4194304;
+                if (expected_delta > delta_time)
+                    SDL_Delay(expected_delta - delta_time);
+                last_sync_time = SDL_GetTicks();
+                last_sync_div = div_counter;
+            }
         }
     }
     exit_game();
