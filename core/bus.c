@@ -47,10 +47,20 @@ uint8_t bus_read(uint16_t address) {
             return val;
         } else if (address >= 0xFF30 && address <= 0xFF3F)
             return apu_read_wave(address);
-        else if (address == _NR52)
-            return memory->io[_NR52 - 0xFF00];
-        else
-            return memory->io[address - 0xFF00];
+        else {
+            uint16_t idx = address - 0xFF00;
+            uint8_t val = memory->io[idx];
+            switch (address) {
+                case _NR10: return 0x80 | (val & 0x7F);
+                case _NR11: return (val & 0xC0) | 0x3F;
+                case _NR14: return (val & 0x07) | 0xF8;
+                case _NR24: return (val & 0x07) | 0xF8;
+                case _NR34: return (val & 0x07) | 0xF8;
+                case _NR44: return (val & 0x07) | 0xF8;
+                case _NR52: return val | 0x70;
+                default: return val;
+            }
+        }
     } else if (address >= 0xFF80 && address <= 0xFFFE)
         return memory->hram[address - 0xFF80];
     else if (address == 0xFFFF)

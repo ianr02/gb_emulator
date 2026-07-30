@@ -156,9 +156,9 @@ int main(int argc, char *argv[]) {
                 ime_next--;
         }
 
-        static int audio_tick = 0;
-        audio_tick = (audio_tick + 1) & 7;
-        if (audio_tick == 0 && audio_dev > 0) {
+        static uint32_t audio_cycle_prev = 0;
+        if (audio_dev > 0 && div_counter - audio_cycle_prev >= 20000) {
+            audio_cycle_prev = div_counter;
             int16_t buf[512];
             uint16_t n = apu_read_samples(buf, 256);
             if (n > 0)

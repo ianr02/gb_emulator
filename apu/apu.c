@@ -11,12 +11,14 @@ static const uint8_t duty[4][8] = {
     {0,1,1,1,1,1,1,0},
 };
 
-static uint16_t period_11bit(int ch) {
-    static const uint16_t lo_regs[] = {_NR13, _NR23, _NR33};
-    static const uint16_t hi_regs[] = {_NR14, _NR24, _NR34};
-    uint16_t lo = memory->io[lo_regs[ch] - 0xFF00];
-    uint16_t hi = memory->io[hi_regs[ch] - 0xFF00] & 0x07;
-    return (hi << 8) | lo;
+static uint16_t get_period(int ch) {
+    uint16_t freq;
+    switch (ch) {
+        case 0: freq = apu->ch1_freq_latched; break;
+        case 1: freq = apu->ch2_freq_latched; break;
+        default: freq = apu->ch3_freq_latched; break;
+    }
+    return (2048 - freq) * (ch == 2 ? 2 : 4);
 }
 
 static void clock_length(int ch, uint16_t *len, uint8_t *enabled) {
@@ -44,25 +46,13 @@ static void clock_sweep(void) {
                     new_freq = apu->ch1_sweep_shadow + (apu->ch1_sweep_shadow >> shift);
                 } else {
                     new_freq = apu->ch1_sweep_shadow - (apu->ch1_sweep_shadow >> shift);
-                    if ((shift > 0 && (apu->ch1_sweep_shadow >> shift) > apu->ch1_sweep_shadow) || new_freq > 2047) {
-                        apu->ch1_enabled = 0;
-                        memory->io[_NR52 - 0xFF00] &= ~1;
-                        return;
-                    }
                 }
+                apu->ch1_sweep_shadow = new_freq;
+                memory->io[_NR13 - 0xFF00] = new_freq & 0xFF;
+                memory->io[_NR14 - 0xFF00] = (memory->io[_NR14 - 0xFF00] & ~0x07) | ((new_freq >> 8) & 0x07);
                 if (new_freq > 2047) {
                     apu->ch1_enabled = 0;
                     memory->io[_NR52 - 0xFF00] &= ~1;
-                    return;
-                }
-                if (shift > 0) {
-                    apu->ch1_sweep_shadow = new_freq;
-                    memory->io[_NR13 - 0xFF00] = new_freq & 0xFF;
-                    memory->io[_NR14 - 0xFF00] = (memory->io[_NR14 - 0xFF00] & ~0x07) | ((new_freq >> 8) & 0x07);
-                    if (dir == 1 && new_freq > 2047) {
-                        apu->ch1_enabled = 0;
-                        memory->io[_NR52 - 0xFF00] &= ~1;
-                    }
                 }
             }
         }
@@ -70,13 +60,12 @@ static void clock_sweep(void) {
 }
 
 static void clock_envelope(int ch) {
-    uint8_t pace_ptr[] = {0, 0, 0}; // dummy, not used
-    uint8_t *vol, *pace, *dac;
+    uint8_t *vol, *pace;
     uint16_t nrx2_addr;
     switch (ch) {
-        case 0: vol = &apu->ch1_volume; pace = &apu->ch1_env_pace; dac = &apu->ch1_dac_enabled; nrx2_addr = _NR12; break;
-        case 1: vol = &apu->ch2_volume; pace = &apu->ch2_env_pace; dac = &apu->ch2_dac_enabled; nrx2_addr = _NR22; break;
-        default: vol = &apu->ch4_volume; pace = &apu->ch4_env_pace; dac = &apu->ch4_dac_enabled; nrx2_addr = _NR42; break;
+        case 0: vol = &apu->ch1_volume; pace = &apu->ch1_env_pace; nrx2_addr = _NR12; break;
+        case 1: vol = &apu->ch2_volume; pace = &apu->ch2_env_pace; nrx2_addr = _NR22; break;
+        default: vol = &apu->ch4_volume; pace = &apu->ch4_env_pace; nrx2_addr = _NR42; break;
     }
     uint8_t reg = memory->io[nrx2_addr - 0xFF00];
     uint8_t p = reg & 0x07;
@@ -99,9 +88,10 @@ static void trigger_ch1(void) {
     apu->ch1_enabled = 1;
     memory->io[_NR52 - 0xFF00] |= 1;
     uint8_t len = memory->io[_NR11 - 0xFF00] & 0x3F;
-    if (apu->ch1_length == 0) apu->ch1_length = 64 - len;
-    uint16_t freq = period_11bit(0);
-    apu->ch1_freq_timer = (2048 - freq) * 4;
+    apu->ch1_length = 64 - len;
+    apu->ch1_freq_latched = (memory->io[_NR14 - 0xFF00] & 0x07) << 8 | memory->io[_NR13 - 0xFF00];
+    uint16_t freq = get_period(0);
+    apu->ch1_freq_timer = freq;
     uint8_t reg = memory->io[_NR12 - 0xFF00];
     uint8_t init_vol = reg >> 4;
     uint8_t dir = (reg >> 3) & 0x01;
@@ -114,18 +104,17 @@ static void trigger_ch1(void) {
     uint8_t pace = (memory->io[_NR10 - 0xFF00] >> 4) & 0x07;
     apu->ch1_sweep_timer = pace;
     apu->ch1_sweep_enabled = (pace > 0 || (memory->io[_NR10 - 0xFF00] & 0x07) > 0);
-    if ((memory->io[_NR10 - 0xFF00] & 0x07) > 0) {
-        uint8_t shift = memory->io[_NR10 - 0xFF00] & 0x07;
-        uint8_t dir_sweep = (memory->io[_NR10 - 0xFF00] >> 3) & 0x01;
-        uint16_t new_freq;
-        if (dir_sweep == 0)
-            new_freq = apu->ch1_sweep_shadow + (apu->ch1_sweep_shadow >> shift);
-        else
-            new_freq = apu->ch1_sweep_shadow - (apu->ch1_sweep_shadow >> shift);
-        if (new_freq > 2047) {
-            apu->ch1_enabled = 0;
-            memory->io[_NR52 - 0xFF00] &= ~1;
-        }
+    uint8_t shift = memory->io[_NR10 - 0xFF00] & 0x07;
+    uint8_t dir_sweep = (memory->io[_NR10 - 0xFF00] >> 3) & 0x01;
+    uint16_t delta = apu->ch1_sweep_shadow >> shift;
+    uint16_t new_freq;
+    if (dir_sweep == 0)
+        new_freq = apu->ch1_sweep_shadow + delta;
+    else
+        new_freq = apu->ch1_sweep_shadow - delta;
+    if (new_freq > 2047) {
+        apu->ch1_enabled = 0;
+        memory->io[_NR52 - 0xFF00] &= ~1;
     }
 }
 
@@ -133,9 +122,10 @@ static void trigger_ch2(void) {
     apu->ch2_enabled = 1;
     memory->io[_NR52 - 0xFF00] |= 2;
     uint8_t len = memory->io[_NR21 - 0xFF00] & 0x3F;
-    if (apu->ch2_length == 0) apu->ch2_length = 64 - len;
-    uint16_t freq = period_11bit(1);
-    apu->ch2_freq_timer = (2048 - freq) * 4;
+    apu->ch2_length = 64 - len;
+    apu->ch2_freq_latched = (memory->io[_NR24 - 0xFF00] & 0x07) << 8 | memory->io[_NR23 - 0xFF00];
+    uint16_t freq = get_period(1);
+    apu->ch2_freq_timer = freq;
     uint8_t reg = memory->io[_NR22 - 0xFF00];
     uint8_t init_vol = reg >> 4;
     uint8_t dir = (reg >> 3) & 0x01;
@@ -151,9 +141,10 @@ static void trigger_ch3(void) {
     if (!apu->ch3_dac_enabled) { apu->ch3_enabled = 0; memory->io[_NR52 - 0xFF00] &= ~4; return; }
     apu->ch3_enabled = 1;
     memory->io[_NR52 - 0xFF00] |= 4;
-    if (apu->ch3_length == 0) apu->ch3_length = 256 - memory->io[_NR31 - 0xFF00];
-    uint16_t freq = period_11bit(2);
-    apu->ch3_freq_timer = (2048 - freq) * 2;
+    apu->ch3_length = 256 - memory->io[_NR31 - 0xFF00];
+    apu->ch3_freq_latched = (memory->io[_NR34 - 0xFF00] & 0x07) << 8 | memory->io[_NR33 - 0xFF00];
+    uint16_t freq = get_period(2);
+    apu->ch3_freq_timer = freq;
     apu->ch3_wave_pos = 0;
     uint8_t byte = apu->wave_ram[0];
     apu->ch3_sample = (apu->ch3_wave_pos & 1) ? (byte & 0x0F) : (byte >> 4);
@@ -163,7 +154,7 @@ static void trigger_ch4(void) {
     apu->ch4_enabled = 1;
     memory->io[_NR52 - 0xFF00] |= 8;
     uint8_t len = memory->io[_NR41 - 0xFF00] & 0x3F;
-    if (apu->ch4_length == 0) apu->ch4_length = 64 - len;
+    apu->ch4_length = 64 - len;
     uint8_t reg = memory->io[_NR42 - 0xFF00];
     uint8_t init_vol = reg >> 4;
     uint8_t dir = (reg >> 3) & 0x01;
@@ -176,7 +167,7 @@ static void trigger_ch4(void) {
     uint8_t nr43 = memory->io[_NR43 - 0xFF00];
     uint8_t shift = (nr43 >> 4) & 0x0F;
     uint8_t divisor_code = nr43 & 0x07;
-    uint16_t divisor = (divisor_code == 0) ? 8 : divisor_code * 16;
+    uint32_t divisor = (divisor_code == 0) ? 8 : divisor_code * 16;
     apu->ch4_freq_timer = divisor << shift;
 }
 
@@ -193,9 +184,8 @@ void apu_write_io(uint16_t addr, uint8_t val) {
         if (!(val & 0x80)) {
             memset(memory->io + 0x10, 0, 0x16);
             memory->io[_NR52 - 0xFF00] = 0x00;
-            apu->ch1_enabled = apu->ch2_enabled = apu->ch3_enabled = apu->ch4_enabled = 0;
-            apu->ch1_dac_enabled = apu->ch2_dac_enabled = apu->ch3_dac_enabled = apu->ch4_dac_enabled = 0;
-            apu->apu_enabled = 0;
+            memset(apu, 0, sizeof(APU));
+            apu->ch4_lfsr = 0x7FFF;
         } else {
             memory->io[_NR52 - 0xFF00] = (val & 0xF0) | (memory->io[_NR52 - 0xFF00] & 0x0F);
             apu->apu_enabled = 1;
@@ -212,17 +202,62 @@ void apu_write_io(uint16_t addr, uint8_t val) {
         return;
     }
 
+    uint8_t old_val = memory->io[idx];
     memory->io[idx] = val;
 
     if (addr >= _NR10 && addr <= _NR14) {
-        if (addr == _NR14 && (val & 0x80)) trigger_ch1();
+        if (addr == _NR14) {
+            apu->ch1_freq_latched = (val & 0x07) << 8 | memory->io[_NR13 - 0xFF00];
+            if (val & 0x80) trigger_ch1();
+            uint8_t prev_bit6 = (old_val >> 6) & 1;
+            uint8_t new_bit6 = (val >> 6) & 1;
+            if (!prev_bit6 && new_bit6 && (apu->frame_step & 1)) {
+                if (apu->ch1_length > 0) {
+                    apu->ch1_length--;
+                    if (apu->ch1_length == 0) {
+                        apu->ch1_enabled = 0;
+                        memory->io[_NR52 - 0xFF00] &= ~1;
+                    }
+                }
+            }
+        }
         if (addr == _NR10) {
-            if (!(val & 0x07)) apu->ch1_sweep_enabled = 0;
+            uint8_t pace = (val >> 4) & 0x07;
+            uint8_t shift = val & 0x07;
+            if (pace == 0 && shift == 0) apu->ch1_sweep_enabled = 0;
         }
     } else if (addr >= _NR21 && addr <= _NR24) {
-        if (addr == _NR24 && (val & 0x80)) trigger_ch2();
+        if (addr == _NR24) {
+            apu->ch2_freq_latched = (val & 0x07) << 8 | memory->io[_NR23 - 0xFF00];
+            if (val & 0x80) trigger_ch2();
+            uint8_t prev_bit6 = (old_val >> 6) & 1;
+            uint8_t new_bit6 = (val >> 6) & 1;
+            if (!prev_bit6 && new_bit6 && (apu->frame_step & 1)) {
+                if (apu->ch2_length > 0) {
+                    apu->ch2_length--;
+                    if (apu->ch2_length == 0) {
+                        apu->ch2_enabled = 0;
+                        memory->io[_NR52 - 0xFF00] &= ~2;
+                    }
+                }
+            }
+        }
     } else if (addr >= _NR30 && addr <= _NR34) {
-        if (addr == _NR34 && (val & 0x80)) trigger_ch3();
+        if (addr == _NR34) {
+            apu->ch3_freq_latched = (val & 0x07) << 8 | memory->io[_NR33 - 0xFF00];
+            if (val & 0x80) trigger_ch3();
+            uint8_t prev_bit6 = (old_val >> 6) & 1;
+            uint8_t new_bit6 = (val >> 6) & 1;
+            if (!prev_bit6 && new_bit6 && (apu->frame_step & 1)) {
+                if (apu->ch3_length > 0) {
+                    apu->ch3_length--;
+                    if (apu->ch3_length == 0) {
+                        apu->ch3_enabled = 0;
+                        memory->io[_NR52 - 0xFF00] &= ~4;
+                    }
+                }
+            }
+        }
         apu->ch3_dac_enabled = (memory->io[_NR30 - 0xFF00] >> 7) & 1;
         if (!apu->ch3_dac_enabled && apu->ch3_enabled) {
             apu->ch3_enabled = 0;
@@ -230,13 +265,20 @@ void apu_write_io(uint16_t addr, uint8_t val) {
         }
     } else if (addr >= _NR41 && addr <= _NR44) {
         if (addr == _NR44 && (val & 0x80)) trigger_ch4();
-    } else if (addr >= 0xFF30 && addr <= 0xFF3F) {
-        if (!apu->ch3_dac_enabled)
-            apu->wave_ram[addr - 0xFF30] = val;
-        else if (!apu->ch3_enabled)
-            apu->wave_ram[addr - 0xFF30] = val;
+        if (addr == _NR44) {
+            uint8_t prev_bit6 = (old_val >> 6) & 1;
+            uint8_t new_bit6 = (val >> 6) & 1;
+            if (!prev_bit6 && new_bit6 && (apu->frame_step & 1)) {
+                if (apu->ch4_length > 0) {
+                    apu->ch4_length--;
+                    if (apu->ch4_length == 0) {
+                        apu->ch4_enabled = 0;
+                        memory->io[_NR52 - 0xFF00] &= ~8;
+                    }
+                }
+            }
+        }
     } else if (addr == _NR50 || addr == _NR51) {
-        // Stored in io[] above
     }
 }
 
@@ -279,8 +321,8 @@ static void mix(int16_t *left, int16_t *right) {
     }
     uint8_t nr51 = memory->io[_NR51 - 0xFF00];
     uint8_t nr50 = memory->io[_NR50 - 0xFF00];
-    int l_vol = ((nr50 >> 4) & 0x07) + 1;
-    int r_vol = (nr50 & 0x07) + 1;
+    int l_vol = ((nr50 >> 4) & 0x07);
+    int r_vol = (nr50 & 0x07);
     int l_sum = 0, r_sum = 0;
     if (nr51 & 0x10) l_sum += ch1_out;
     if (nr51 & 0x20) l_sum += ch2_out;
@@ -290,14 +332,22 @@ static void mix(int16_t *left, int16_t *right) {
     if (nr51 & 0x02) r_sum += ch2_out;
     if (nr51 & 0x04) r_sum += ch3_out;
     if (nr51 & 0x08) r_sum += ch4_out;
+    if (l_vol == 0) l_sum = 0;
+    if (r_vol == 0) r_sum = 0;
 
     int32_t raw_l = (l_sum * 2 - 60) * 546 * l_vol / 8;
     int32_t raw_r = (r_sum * 2 - 60) * 546 * r_vol / 8;
 
-    int32_t out_l = raw_l - apu->hp_cap_l;
-    int32_t out_r = raw_r - apu->hp_cap_r;
-    apu->hp_cap_l += out_l / 10000;
-    apu->hp_cap_r += out_r / 10000;
+    int32_t out_l, out_r;
+    if (l_sum == 0 && r_sum == 0) {
+        out_l = 0;
+        out_r = 0;
+    } else {
+        out_l = raw_l - apu->hp_cap_l;
+        out_r = raw_r - apu->hp_cap_r;
+        apu->hp_cap_l += out_l / 1024;
+        apu->hp_cap_r += out_r / 1024;
+    }
 
     if (out_l < -32768) out_l = -32768;
     else if (out_l > 32767) out_l = 32767;
@@ -335,48 +385,45 @@ void apu_step(uint16_t cycles) {
     }
 
     if (apu->ch1_enabled) {
-        if (apu->ch1_freq_timer <= cycles) {
-            uint16_t freq = period_11bit(0);
-            apu->ch1_freq_timer += (2048 - freq) * 4;
+        uint16_t period = get_period(0);
+        apu->ch1_freq_timer -= cycles;
+        while ((int16_t)apu->ch1_freq_timer <= 0) {
+            apu->ch1_freq_timer += period;
             apu->ch1_duty_pos = (apu->ch1_duty_pos - 1) & 7;
-        } else {
-            apu->ch1_freq_timer -= cycles;
         }
     }
     if (apu->ch2_enabled) {
-        if (apu->ch2_freq_timer <= cycles) {
-            uint16_t freq = period_11bit(1);
-            apu->ch2_freq_timer += (2048 - freq) * 4;
+        uint16_t period = get_period(1);
+        apu->ch2_freq_timer -= cycles;
+        while ((int16_t)apu->ch2_freq_timer <= 0) {
+            apu->ch2_freq_timer += period;
             apu->ch2_duty_pos = (apu->ch2_duty_pos - 1) & 7;
-        } else {
-            apu->ch2_freq_timer -= cycles;
         }
     }
     if (apu->ch3_enabled) {
-        if (apu->ch3_freq_timer <= cycles) {
-            uint16_t freq = period_11bit(2);
-            apu->ch3_freq_timer += (2048 - freq) * 2;
+        uint16_t period = get_period(2);
+        apu->ch3_freq_timer -= cycles;
+        while ((int16_t)apu->ch3_freq_timer <= 0) {
+            apu->ch3_freq_timer += period;
             apu->ch3_wave_pos = (apu->ch3_wave_pos + 1) & 31;
             uint8_t byte = apu->wave_ram[apu->ch3_wave_pos >> 1];
             apu->ch3_sample = (apu->ch3_wave_pos & 1) ? (byte & 0x0F) : (byte >> 4);
-        } else {
-            apu->ch3_freq_timer -= cycles;
         }
     }
     if (apu->ch4_enabled) {
-        if (apu->ch4_freq_timer <= cycles) {
-            uint8_t nr43 = memory->io[_NR43 - 0xFF00];
-            uint8_t shift = (nr43 >> 4) & 0x0F;
-            uint8_t div_code = nr43 & 0x07;
-            uint16_t divisor = (div_code == 0) ? 8 : div_code * 16;
-            apu->ch4_freq_timer += divisor << shift;
+        uint8_t nr43 = memory->io[_NR43 - 0xFF00];
+        uint8_t shift = (nr43 >> 4) & 0x0F;
+        uint8_t div_code = nr43 & 0x07;
+        uint32_t divisor = (div_code == 0) ? 8 : div_code * 16;
+        uint32_t period = divisor << shift;
+        apu->ch4_freq_timer -= cycles;
+        while ((int32_t)apu->ch4_freq_timer <= 0) {
+            apu->ch4_freq_timer += period;
             uint8_t xor_bit = ((apu->ch4_lfsr ^ (apu->ch4_lfsr >> 1)) & 1);
             apu->ch4_lfsr >>= 1;
             apu->ch4_lfsr |= (xor_bit << 14);
             if (nr43 & 0x08)
                 apu->ch4_lfsr = (apu->ch4_lfsr & ~0x40) | (xor_bit << 6);
-        } else {
-            apu->ch4_freq_timer -= cycles;
         }
     }
 

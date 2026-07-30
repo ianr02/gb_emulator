@@ -9,6 +9,7 @@
 
 typedef struct {
     uint16_t ch1_freq_timer;
+    uint16_t ch1_freq_latched;
     uint8_t  ch1_duty_pos;
     uint8_t  ch1_volume;
     uint16_t ch1_length;
@@ -22,6 +23,7 @@ typedef struct {
     uint8_t  ch1_sweep_enabled;
 
     uint16_t ch2_freq_timer;
+    uint16_t ch2_freq_latched;
     uint8_t  ch2_duty_pos;
     uint8_t  ch2_volume;
     uint16_t ch2_length;
@@ -31,6 +33,7 @@ typedef struct {
     uint8_t  ch2_env_pace;
 
     uint16_t ch3_freq_timer;
+    uint16_t ch3_freq_latched;
     uint8_t  ch3_wave_pos;
     uint8_t  ch3_sample;
     uint16_t ch3_length;
@@ -38,7 +41,7 @@ typedef struct {
     uint8_t  ch3_dac_enabled;
 
     uint16_t ch4_lfsr;
-    uint16_t ch4_freq_timer;
+    uint32_t ch4_freq_timer;
     uint8_t  ch4_volume;
     uint16_t ch4_length;
     uint8_t  ch4_enabled;
@@ -51,6 +54,7 @@ typedef struct {
     uint16_t system_divider;
     uint8_t  frame_step;
     uint8_t  apu_enabled;
+    uint8_t  prev_nrx4_bit6[4];
 
     uint32_t cycle_acc;
     int32_t  hp_cap_l;
