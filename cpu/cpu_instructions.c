@@ -661,7 +661,7 @@ void SCF() {
 
 void HALT() {
     if (ime) {
-        while (!(memory->io[_IF - 0xFF00] & memory->ie))
+        while (!(memory->io[_IF - 0xFF00] & memory->ie & 0x1F))
             update_timers(4);
         handle_interrupts();
     } else if (!(memory->io[_IF - 0xFF00] & memory->ie & 0x1F)) {
@@ -675,7 +675,7 @@ void STOP() {
     ++reg->pc;
 
     if (ime) {
-        while (!(memory->io[_IF - 0xFF00] & memory->ie))
+        while (!(memory->io[_IF - 0xFF00] & memory->ie & 0x1F))
             update_timers(4);
     } else {
         while (!(memory->io[_IF - 0xFF00] & memory->ie & 0x1F))

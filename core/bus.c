@@ -50,6 +50,8 @@ uint8_t bus_read(uint16_t address) {
         else {
             uint16_t idx = address - 0xFF00;
             uint8_t val = memory->io[idx];
+            if (address == _IF)
+                return val | 0xE0;
             if (address >= 0xFF10 && address <= 0xFF2F) {
                 static const uint8_t masks[32] = {
                     0x80, 0x3F, 0x00, 0xFF, 0xBF, // NR10-NR14
@@ -66,7 +68,7 @@ uint8_t bus_read(uint16_t address) {
     } else if (address >= 0xFF80 && address <= 0xFFFE)
         return memory->hram[address - 0xFF80];
     else if (address == 0xFFFF)
-        return memory->ie;
+        return memory->ie | 0xE0;
     else
         return 0xFF;
 }

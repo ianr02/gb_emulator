@@ -12,13 +12,14 @@ A Game Boy emulator written in C with an SDL2 frontend.
 
 ## Compatibility
 
-Passes blargg's test ROMs:
-
-- `cpu_instrs`
-- `instr_timing`
-- `mem_timing`
-- `mem_timing2`
-- `interrupt_time`
+| Test | Check |
+|------|-------|
+| `cpu_instrs.gb` | Passes |
+| `instr_timing.gb` | Passes |
+| `mem_timing.gb` | Passes |
+| `mem_timing2.gb` | Passes |
+| `interrupt_time.gb` | Passes (DMG portion; the test is designed for both DMG and GBC) |
+| `halt_bug.gb` | Passes |
 
 ## Build
 
