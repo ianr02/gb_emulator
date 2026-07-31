@@ -290,9 +290,6 @@ void apu_write_io(uint16_t addr, uint8_t val) {
             if (val & 0x80) trigger_ch2();
             uint16_t elapsed = (uint16_t)(apu->system_divider - apu->last_len_clock_div);
             int in_first_half = elapsed < 8192;
-            printf("DBG NR24: val=%02X step=%d div=%04X last=%04X elapsed=%04X half=%s len=%d old_len_en=%d\n",
-                   val, apu->frame_step, apu->system_divider, apu->last_len_clock_div, elapsed,
-                   in_first_half?"first":"second", apu->ch2_length, old_len_enabled);
             if ((val & 0x40) && !old_len_enabled && in_first_half) {
                 if (apu->ch2_length > 0) {
                     apu->ch2_length--;
