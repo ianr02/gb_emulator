@@ -32,33 +32,47 @@ static void clock_length(int ch, uint16_t *len, uint8_t *enabled) {
     }
 }
 
+/* Helper function for Test 04: Sweep frequency overflow calculation */
+static uint16_t calculate_sweep_freq(void) {
+    uint8_t dir   = (memory->io[_NR10 - 0xFF00] >> 3) & 1;
+    uint8_t shift = memory->io[_NR10 - 0xFF00] & 0x07;
+
+    uint16_t delta = apu->ch1_sweep_shadow >> shift;
+    uint16_t new_freq;
+
+    if (dir == 0)
+        new_freq = apu->ch1_sweep_shadow + delta;
+    else
+        new_freq = apu->ch1_sweep_shadow - delta;
+
+    if (new_freq > 2047) {
+        apu->ch1_enabled = 0;
+        memory->io[_NR52 - 0xFF00] &= ~1;
+    }
+    return new_freq;
+}
+
 static void clock_sweep(void) {
     if (!apu->ch1_sweep_enabled) return;
     if (apu->ch1_sweep_timer > 0) {
         apu->ch1_sweep_timer--;
         if (apu->ch1_sweep_timer == 0) {
             uint8_t pace = (memory->io[_NR10 - 0xFF00] >> 4) & 0x07;
-            if (pace > 0) apu->ch1_sweep_timer = pace;
+            apu->ch1_sweep_timer = (pace == 0) ? 8 : pace;
 
-            uint8_t dir   = (memory->io[_NR10 - 0xFF00] >> 3) & 1;
-            uint8_t shift = memory->io[_NR10 - 0xFF00] & 0x07;
+            if (pace > 0) {
+                uint8_t shift = memory->io[_NR10 - 0xFF00] & 0x07;
+                uint16_t new_freq = calculate_sweep_freq();
 
-            uint16_t new_freq = apu->ch1_sweep_shadow;
-            uint16_t delta = apu->ch1_sweep_shadow >> shift;
-            if (dir == 0) new_freq += delta;
-            else          new_freq -= delta;
+                if (new_freq <= 2047 && shift > 0) {
+                    apu->ch1_sweep_shadow = new_freq & 0x7FF;
+                    memory->io[_NR13 - 0xFF00] = new_freq & 0xFF;
+                    memory->io[_NR14 - 0xFF00] = (memory->io[_NR14 - 0xFF00] & ~0x07) | ((new_freq >> 8) & 0x07);
+                    apu->ch1_freq_latched = apu->ch1_sweep_shadow;
 
-            if (new_freq > 2047) {
-                apu->ch1_enabled = 0;
-                memory->io[_NR52 - 0xFF00] &= ~1;
-                return;
-            }
-
-            if (shift > 0) {
-                apu->ch1_sweep_shadow = new_freq & 0x7FF;
-                memory->io[_NR13 - 0xFF00] = new_freq & 0xFF;
-                memory->io[_NR14 - 0xFF00] = (memory->io[_NR14 - 0xFF00] & ~0x07) | ((new_freq >> 8) & 0x07);
-                apu->ch1_freq_latched = apu->ch1_sweep_shadow;
+                    /* Test 04 Fix: Second overflow check immediately after writeback */
+                    calculate_sweep_freq();
+                }
             }
         }
     }
@@ -103,28 +117,15 @@ static void trigger_ch1(void) {
     uint8_t env_pace_val = (env_period == 0) ? 8 : env_period;
     apu->ch1_env_pace = env_pace_val;
     if (((apu->frame_step + 1) & 7) == 7) apu->ch1_env_pace++;
+    
+    /* Test 04 Fix: Hardware sweep shadow reload & initial overflow check on trigger */
     apu->ch1_sweep_shadow = apu->ch1_freq_latched;
     uint8_t pace = (memory->io[_NR10 - 0xFF00] >> 4) & 0x07;
-    apu->ch1_sweep_timer = pace;
     uint8_t shift = memory->io[_NR10 - 0xFF00] & 0x07;
+    apu->ch1_sweep_timer = (pace == 0) ? 8 : pace;
     apu->ch1_sweep_enabled = (pace > 0 || shift > 0);
     if (shift > 0) {
-        uint8_t dir_sweep = (memory->io[_NR10 - 0xFF00] >> 3) & 0x01;
-        uint16_t delta = apu->ch1_sweep_shadow >> shift;
-        uint16_t new_freq;
-        if (dir_sweep == 0)
-            new_freq = apu->ch1_sweep_shadow + delta;
-        else
-            new_freq = apu->ch1_sweep_shadow - delta;
-        if (new_freq > 2047) {
-            apu->ch1_enabled = 0;
-            memory->io[_NR52 - 0xFF00] &= ~1;
-        } else {
-            apu->ch1_sweep_shadow = new_freq & 0x7FF;
-            memory->io[_NR13 - 0xFF00] = new_freq & 0xFF;
-            memory->io[_NR14 - 0xFF00] = (memory->io[_NR14 - 0xFF00] & ~0x07) | ((new_freq >> 8) & 0x07);
-            apu->ch1_freq_latched = apu->ch1_sweep_shadow;
-        }
+        calculate_sweep_freq();
     }
 }
 
@@ -183,10 +184,12 @@ void apu_init(void) {
     apu = calloc(1, sizeof(APU));
     apu->ch4_lfsr = 0x7FFF;
     apu->apu_enabled = (memory->io[_NR52 - 0xFF00] >> 7) & 1;
+    apu->frame_step = 7; /* Initialized to step 7 so first clock ticks to Step 0 */
 }
 
+/* Test 07 Fix: Precise falling-edge detection of DIV bit 12 */
 void apu_div_write(void) {
-    int advance = apu->system_divider & 0x1000;
+    int advance = (apu->system_divider & 0x1000) != 0;
     apu->system_divider = 0;
     if (advance && apu->apu_enabled) {
         uint8_t step = (apu->frame_step + 1) & 7;
@@ -220,7 +223,7 @@ void apu_write_io(uint16_t addr, uint8_t val) {
             memory->io[_NR52 - 0xFF00] = (val & 0xF0) | (memory->io[_NR52 - 0xFF00] & 0x0F);
             apu->apu_enabled = 1;
             apu->system_divider = 0;
-            apu->frame_step = 0;
+            apu->frame_step = 7; /* Test 07 Fix: Next DIV tick advances to Step 0 */
             apu->last_len_clock_div = 0;
             apu->ch3_sample = 0;
             apu->ch1_triggered_once = 0;
