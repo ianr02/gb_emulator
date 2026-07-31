@@ -1,6 +1,6 @@
 #include "core/bus.h"
 #include "core/emulator_core.h"
-#include "core/oam.h"
+#include "oam_dma/oam.h"
 #include "ppu/ppu_memory.h"
 #include "apu/apu.h"
 

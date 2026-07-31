@@ -1,5 +1,6 @@
 #include "cpu/cpu_instructions.h"
 #include "core/emulator_core.h"
+#include "oam_dma/oam.h"
 #include "ppu/ppu.h"
 #include "apu/apu.h"
 
@@ -138,11 +139,13 @@ int main(int argc, char *argv[]) {
         if (ime) {
             handle_interrupts();
         }
+        uint16_t fetch_pc = reg->pc;
         opcode = read_byte(reg->pc);
         if (!halt_bug) {
             ++reg->pc;
         } else
             halt_bug = false;
+        if (fetch_pc >= 0xFE00 && fetch_pc <= 0xFEFF) oam_bug_incdec();
 
         if (opcode_table[opcode] != NULL) {
             opcode_table[opcode]();

@@ -11,8 +11,8 @@ add_executable(emulator
     src/main.c
     core/emulator_core.c
     core/bus.c
-    core/dma.c
-    core/oam.c
+    oam_dma/dma.c
+    oam_dma/oam.c
     ppu/ppu.c
     ppu/ppu_memory.c
     cpu/cpu_instructions.c

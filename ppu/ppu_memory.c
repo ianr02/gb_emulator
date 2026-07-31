@@ -1,7 +1,7 @@
 #include "ppu/ppu_memory.h"
 #include "ppu/ppu.h"
 #include "core/emulator_core.h"
-#include "core/dma.h"
+#include "oam_dma/dma.h"
 
 uint8_t ppu_read_vram(uint16_t addr) {
     uint8_t stat_mode = memory->io[_STAT - 0xFF00] & 0x03;
@@ -17,10 +17,13 @@ void ppu_write_vram(uint16_t addr, uint8_t val) {
 
 void ppu_write_io(uint16_t addr, uint8_t val) {
     if (addr == _LCDC) {
+        uint8_t old = memory->io[_LCDC - 0xFF00];
         memory->io[_LCDC - 0xFF00] = val;
         if (!(val & 0x80)) {
             memory->io[_LY - 0xFF00] = 0;
             memory->io[_STAT - 0xFF00] &= 0xFC;
+        } else if (!(old & 0x80)) {
+            ppu_lcd_on_phase();
         }
     } else if (addr == _STAT) {
         memory->io[_STAT - 0xFF00] = (val & 0x78) | (memory->io[_STAT - 0xFF00] & 0x07);

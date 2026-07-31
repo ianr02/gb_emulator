@@ -1,5 +1,6 @@
 #include "core/emulator_core.h"
 #include "core/bus.h"
+#include "oam_dma/oam.h"
 #include "ppu/ppu.h"
 
 GameBoyMemory *memory;
@@ -117,6 +118,7 @@ void handle_interrupts() {
             ime_next = -1;
             memory->io[_IF - 0xFF00] &= ~bit;
             update_timers(4);
+            if (reg->sp >= 0xFE00 && reg->sp <= 0xFEFF) oam_bug_incdec();
             save_byte(--reg->sp, (reg->pc >> 8) & 0xFF);
             save_byte(--reg->sp, reg->pc & 0xFF);
             update_timers(8);

@@ -1,5 +1,6 @@
 #include "cpu/cpu_instructions.h"
 #include "core/emulator_core.h"
+#include "oam_dma/oam.h"
 
 bool prefix_flag = false;
 bool halt_bug = false;
@@ -40,6 +41,7 @@ void LD_##reg_name##_nn() { \
 
 #define PUSH_REG16(reg_name) \
 void PUSH_##reg_name() { \
+    if (reg->sp >= 0xFE00 && reg->sp <= 0xFEFF) oam_bug_incdec(); \
     update_timers(4); \
     save_byte(--reg->sp, (uint8_t)(reg->reg_name >> 8)); \
     save_byte(--reg->sp, (uint8_t)(reg->reg_name & 0xFF)); \
@@ -47,7 +49,9 @@ void PUSH_##reg_name() { \
 
 #define POP_REG16(reg_name) \
 void POP_##reg_name() { \
+    oam_set_read_inc(reg->sp >= 0xFE00 && reg->sp <= 0xFEFF); \
     uint8_t low = read_byte(reg->sp++); \
+    oam_set_read_inc(false); \
     uint8_t high = read_byte(reg->sp++); \
     uint16_t val = (high << 8) | low; \
     reg->reg_name = val; \
@@ -187,12 +191,14 @@ void ADD_HL_##reg_name(){ \
 
 #define GEN_INC_REG16(reg_name) \
 void INC_##reg_name(){ \
+    if (reg->reg_name >= 0xFE00 && reg->reg_name <= 0xFEFF) oam_bug_incdec(); \
     ++reg->reg_name; \
     update_timers(4); \
 }
 
 #define GEN_DEC_REG16(reg_name) \
 void DEC_##reg_name(){ \
+    if (reg->reg_name >= 0xFE00 && reg->reg_name <= 0xFEFF) oam_bug_incdec(); \
     --reg->reg_name; \
     update_timers(4); \
 }
@@ -367,7 +373,9 @@ void SV_nn_sp(){
 }
 
 void LDD_a_hl() {
+    oam_set_read_inc(reg->hl >= 0xFE00 && reg->hl <= 0xFEFF);
     reg->a = read_byte(reg->hl);
+    oam_set_read_inc(false);
     --reg->hl;
 }
 
@@ -377,7 +385,9 @@ void SVD_a_hl() {
 }
 
 void LDI_a_hl() {
+    oam_set_read_inc(reg->hl >= 0xFE00 && reg->hl <= 0xFEFF);
     reg->a = read_byte(reg->hl);
+    oam_set_read_inc(false);
     ++reg->hl;
 }
 
@@ -885,6 +895,7 @@ void CALL() {
     uint8_t low = read_byte(reg->pc++);
     uint8_t high = read_byte(reg->pc++);
     uint16_t address = (high<<8) | low;
+    if (reg->sp >= 0xFE00 && reg->sp <= 0xFEFF) oam_bug_incdec();
     save_byte(--reg->sp, (reg->pc >> 8) & 0xFF);
     save_byte(--reg->sp, reg->pc & 0xFF);
     reg->pc = address;
@@ -919,6 +930,7 @@ void CALL_COND() {
         break;
     }
     if(condition_met){
+        if (reg->sp >= 0xFE00 && reg->sp <= 0xFEFF) oam_bug_incdec();
         save_byte(--reg->sp, (reg->pc >> 8) & 0xFF);
         save_byte(--reg->sp, reg->pc & 0xFF);
         reg->pc = address;
@@ -953,6 +965,7 @@ void RST() {
             offset = 0x38;
             break;
     }
+    if (reg->sp >= 0xFE00 && reg->sp <= 0xFEFF) oam_bug_incdec();
     save_byte(--reg->sp, (reg->pc >> 8) & 0xFF);
     save_byte(--reg->sp, reg->pc & 0xFF);
     reg->pc = 0x0000 + offset;
@@ -960,7 +973,9 @@ void RST() {
 }
 
 void RET() {
+    oam_set_read_inc(reg->sp >= 0xFE00 && reg->sp <= 0xFEFF);
     uint8_t low = read_byte(reg->sp++);
+    oam_set_read_inc(false);
     uint8_t high = read_byte(reg->sp++);
     uint16_t address = (high<<8) | low;
     reg->pc = address;
@@ -989,7 +1004,9 @@ void RET_COND() {
     }
 
     if (condition_met) {
+        oam_set_read_inc(reg->sp >= 0xFE00 && reg->sp <= 0xFEFF);
         uint8_t low = read_byte(reg->sp++);
+        oam_set_read_inc(false);
         uint8_t high = read_byte(reg->sp++);
         reg->pc = (high << 8) | low;
         update_timers(8);
@@ -999,7 +1016,9 @@ void RET_COND() {
 }
 
 void RETI() {
+    oam_set_read_inc(reg->sp >= 0xFE00 && reg->sp <= 0xFEFF);
     uint8_t low = read_byte(reg->sp++);
+    oam_set_read_inc(false);
     uint8_t high = read_byte(reg->sp++);
     uint16_t address = (high<<8) | low;
     reg->pc = address;

@@ -1,4 +1,4 @@
-#include "core/dma.h"
+#include "oam_dma/dma.h"
 #include "core/bus.h"
 #include "core/emulator_core.h"
 

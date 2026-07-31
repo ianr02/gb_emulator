@@ -18,5 +18,9 @@ extern SDL_Renderer *ppu_renderer;
 bool get_stat_line(uint8_t stat);
 void render_scanline(uint8_t ly);
 void update_ppu(uint16_t cycles);
+uint8_t ppu_oam_row(void);
+uint8_t ppu_oam_row_at(int m);
+int ppu_m_cycle(void);
+void ppu_lcd_on_phase(void);
 
 #endif

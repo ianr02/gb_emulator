@@ -20,6 +20,7 @@ A Game Boy emulator written in C with an SDL2 frontend.
 | `mem_timing2.gb` | Passes |
 | `interrupt_time.gb` | Passes (DMG portion; the test is designed for both DMG and GBC) |
 | `halt_bug.gb` | Passes |
+| `oam_bug.gb` | Passes |
 
 ## Build
 

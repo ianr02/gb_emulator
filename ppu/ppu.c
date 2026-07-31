@@ -11,6 +11,8 @@ uint8_t scx_sampled = 0;
 uint8_t window_line_counter = 0;
 bool prev_stat_line = false;
 
+static uint32_t ppu_cycle = 0;
+
 static inline uint8_t vram_read(uint16_t addr) {
     if (addr >= 0x8000 && addr <= 0x9FFF)
         return memory->vram[addr - 0x8000];
@@ -172,6 +174,44 @@ bool get_stat_line(uint8_t stat) {
     return mode0 || mode1 || mode2 || lyc;
 }
 
+// OAM corruption bug window (DMG). Calibrated against blargg's
+// oam_bug test ROM: a 16-bit register inc/dec (whose M-cycle is tracked
+// by the emulator as M-cycle index m) corrupts the OAM row being read by
+// the PPU when m is within the first ~20 M-cycles of a visible scanline.
+// m in [3,21] maps to rows 1..19 (rows 0/1, objects 0 and 1, are never
+// corrupted). When the LCD is enabled the dot counter starts at dot 16 so
+// the first scanline is 113 M-cycles long (lcd_sync test).
+#define OAM_BUG_M_CYCLE_START 0
+#define OAM_BUG_M_CYCLE_END   18
+
+// Returns the OAM row (0-19) being accessed at emulator M-cycle index m,
+// or 0xFF when no corruption can occur.
+uint8_t ppu_oam_row_at(int m) {
+    uint8_t lcdc = memory->io[_LCDC - 0xFF00];
+    if (!(lcdc & 0x80)) return 0xFF;
+    uint8_t ly = memory->io[_LY - 0xFF00];
+    if (ly >= 144) return 0xFF;
+    m = ((m % 114) + 114) % 114;
+    if (m >= OAM_BUG_M_CYCLE_START && m <= OAM_BUG_M_CYCLE_END)
+        return (uint8_t)(m + 1);
+    return 0xFF;
+}
+
+uint8_t ppu_oam_row(void) {
+    return ppu_oam_row_at(ppu_m_cycle());
+}
+
+int ppu_m_cycle(void) {
+    return (int)(ppu_cycle / 4);
+}
+
+// LCD is turned on: the PPU resets its dot counter so that the first
+// scanline is 113 M-cycles (452 dots) long, i.e. LY increments 113
+// M-cycles after the LCDC write (lcd_sync test).
+void ppu_lcd_on_phase(void) {
+    ppu_cycle = 4;
+}
+
 static void sample_line_state(uint8_t ly) {
     if (ly >= 144) { sprites_this_line = 0; return; }
     int height = (memory->io[_LCDC - 0xFF00] & 0x04) ? 16 : 8;
@@ -186,14 +226,13 @@ static void sample_line_state(uint8_t ly) {
 }
 
 void update_ppu(uint16_t cycles) {
-    static uint32_t ppu_cycle = 0;
     static uint8_t prev_ly = 0xFF;
 
     uint8_t lcdc = memory->io[_LCDC - 0xFF00];
     if (!(lcdc & 0x80)) {
         memory->io[_LY - 0xFF00] = 0;
         memory->io[_STAT - 0xFF00] &= 0xFC;
-        ppu_cycle = 0;
+        ppu_cycle = (ppu_cycle + cycles) % 456;
         prev_stat_line = false;
         return;
     }
