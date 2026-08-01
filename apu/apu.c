@@ -184,13 +184,14 @@ void apu_init(void) {
     apu = calloc(1, sizeof(APU));
     apu->ch4_lfsr = 0x7FFF;
     apu->apu_enabled = (memory->io[_NR52 - 0xFF00] >> 7) & 1;
-    apu->frame_step = 7; /* Initialized to step 7 so first clock ticks to Step 0 */
+    apu->frame_step = 7;
 }
 
-/* Test 07 Fix: Precise falling-edge detection of DIV bit 12 */
+/* Test 07 Fix: Falling edge clocking on DIV bit 12 without clearing last_len_clock_div anchor */
 void apu_div_write(void) {
     int advance = (apu->system_divider & 0x1000) != 0;
     apu->system_divider = 0;
+
     if (advance && apu->apu_enabled) {
         uint8_t step = (apu->frame_step + 1) & 7;
         apu->frame_step = step;
@@ -199,6 +200,8 @@ void apu_div_write(void) {
             if (apu->ch2_len_enabled) clock_length(1, &apu->ch2_length, &apu->ch2_enabled);
             if (apu->ch3_len_enabled) clock_length(2, &apu->ch3_length, &apu->ch3_enabled);
             if (apu->ch4_len_enabled) clock_length(3, &apu->ch4_length, &apu->ch4_enabled);
+            
+            /* RULE 2: Anchor the reference cycle cleanly whenever length counters clock */
             apu->last_len_clock_div = (step >> 1) * 0x4000;
         }
         if (step == 2 || step == 6) clock_sweep();
@@ -221,17 +224,20 @@ void apu_write_io(uint16_t addr, uint8_t val) {
             apu->apu_enabled = 0;
         } else {
             memory->io[_NR52 - 0xFF00] = (val & 0xF0) | (memory->io[_NR52 - 0xFF00] & 0x0F);
+            uint8_t was_on = apu->apu_enabled;
             apu->apu_enabled = 1;
-            apu->system_divider = 0;
-            apu->frame_step = 7; /* Test 07 Fix: Next DIV tick advances to Step 0 */
-            apu->last_len_clock_div = 0;
-            apu->ch3_sample = 0;
-            apu->ch1_triggered_once = 0;
-            apu->ch2_triggered_once = 0;
-            apu->ch1_length = 64 - (memory->io[_NR11 - 0xFF00] & 0x3F);
-            apu->ch2_length = 64 - (memory->io[_NR21 - 0xFF00] & 0x3F);
-            apu->ch3_length = 256 - memory->io[_NR31 - 0xFF00];
-            apu->ch4_length = 64 - (memory->io[_NR41 - 0xFF00] & 0x3F);
+            if (!was_on) {
+                apu->system_divider = 0;
+                apu->frame_step = 7;
+                apu->last_len_clock_div = 0;
+                apu->ch3_sample = 0;
+                apu->ch1_triggered_once = 0;
+                apu->ch2_triggered_once = 0;
+                apu->ch1_length = 64 - (memory->io[_NR11 - 0xFF00] & 0x3F);
+                apu->ch2_length = 64 - (memory->io[_NR21 - 0xFF00] & 0x3F);
+                apu->ch3_length = 256 - memory->io[_NR31 - 0xFF00];
+                apu->ch4_length = 64 - (memory->io[_NR41 - 0xFF00] & 0x3F);
+            }
         }
         return;
     }
@@ -259,10 +265,13 @@ void apu_write_io(uint16_t addr, uint8_t val) {
             apu->ch1_freq_latched = (val & 0x07) << 8 | memory->io[_NR13 - 0xFF00];
             uint8_t old_len_enabled = apu->ch1_len_enabled;
             if (val & 0x80) trigger_ch1();
+
+            /* RULE 1: Checking (system_divider - last_len_clock_div) < 8192 */
             if ((val & 0x40) && !old_len_enabled && (((uint16_t)(apu->system_divider - apu->last_len_clock_div)) < 8192)) {
                 if (apu->ch1_length > 0) {
                     apu->ch1_length--;
                     if (apu->ch1_length == 0) {
+                        /* RULE 3: Explicitly setting length = 63 on simultaneous trigger + extra-clock */
                         if (val & 0x80) {
                             apu->ch1_length = 63;
                         } else {
@@ -291,12 +300,15 @@ void apu_write_io(uint16_t addr, uint8_t val) {
             apu->ch2_freq_latched = (val & 0x07) << 8 | memory->io[_NR23 - 0xFF00];
             uint8_t old_len_enabled = apu->ch2_len_enabled;
             if (val & 0x80) trigger_ch2();
+
+            /* RULE 1: Checking (system_divider - last_len_clock_div) < 8192 */
             uint16_t elapsed = (uint16_t)(apu->system_divider - apu->last_len_clock_div);
             int in_first_half = elapsed < 8192;
             if ((val & 0x40) && !old_len_enabled && in_first_half) {
                 if (apu->ch2_length > 0) {
                     apu->ch2_length--;
                     if (apu->ch2_length == 0) {
+                        /* RULE 3: Explicitly setting length = 63 on simultaneous trigger + extra-clock */
                         if (val & 0x80) {
                             apu->ch2_length = 63;
                         } else {
@@ -323,10 +335,13 @@ void apu_write_io(uint16_t addr, uint8_t val) {
             apu->ch3_freq_latched = (val & 0x07) << 8 | memory->io[_NR33 - 0xFF00];
             uint8_t old_len_enabled = apu->ch3_len_enabled;
             if (val & 0x80) trigger_ch3();
+
+            /* RULE 1: Checking (system_divider - last_len_clock_div) < 8192 */
             if ((val & 0x40) && !old_len_enabled && (((uint16_t)(apu->system_divider - apu->last_len_clock_div)) < 8192)) {
                 if (apu->ch3_length > 0) {
                     apu->ch3_length--;
                     if (apu->ch3_length == 0) {
+                        /* RULE 3: Explicitly setting length = 255 for CH3 on simultaneous trigger + extra-clock */
                         if (val & 0x80) {
                             apu->ch3_length = 255;
                         } else {
@@ -349,10 +364,13 @@ void apu_write_io(uint16_t addr, uint8_t val) {
         if (addr == _NR44) {
             uint8_t old_len_enabled = apu->ch4_len_enabled;
             if (val & 0x80) trigger_ch4();
+
+            /* RULE 1: Checking (system_divider - last_len_clock_div) < 8192 */
             if ((val & 0x40) && !old_len_enabled && (((uint16_t)(apu->system_divider - apu->last_len_clock_div)) < 8192)) {
                 if (apu->ch4_length > 0) {
                     apu->ch4_length--;
                     if (apu->ch4_length == 0) {
+                        /* RULE 3: Explicitly setting length = 63 on simultaneous trigger + extra-clock */
                         if (val & 0x80) {
                             apu->ch4_length = 63;
                         } else {
@@ -455,6 +473,8 @@ void apu_step(uint16_t cycles) {
             if (len_en2) clock_length(1, &apu->ch2_length, &apu->ch2_enabled);
             if (len_en3) clock_length(2, &apu->ch3_length, &apu->ch3_enabled);
             if (len_en4) clock_length(3, &apu->ch4_length, &apu->ch4_enabled);
+            
+            /* RULE 2: Anchor reference cycle cleanly */
             apu->last_len_clock_div = (step >> 1) * 0x4000;
         }
         if (step == 2 || step == 6) clock_sweep();
