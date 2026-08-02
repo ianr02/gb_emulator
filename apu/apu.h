@@ -22,6 +22,7 @@ typedef struct {
     uint16_t ch1_sweep_shadow;
     uint8_t  ch1_sweep_timer;
     uint8_t  ch1_sweep_enabled;
+    uint8_t  ch1_sweep_neg_used;
 
     uint16_t ch2_freq_timer;
     uint16_t ch2_freq_latched;

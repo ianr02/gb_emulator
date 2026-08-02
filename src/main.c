@@ -214,4 +214,5 @@ void exit_game() {
     SDL_Quit();
     free(memory);
     free(reg);
+    free(apu);
 }

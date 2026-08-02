@@ -42,8 +42,10 @@ static uint16_t calculate_sweep_freq(void) {
 
     if (dir == 0)
         new_freq = apu->ch1_sweep_shadow + delta;
-    else
+    else {
+        apu->ch1_sweep_neg_used = 1;
         new_freq = apu->ch1_sweep_shadow - delta;
+    }
 
     if (new_freq > 2047) {
         apu->ch1_enabled = 0;
@@ -124,9 +126,8 @@ static void trigger_ch1(void) {
     uint8_t shift = memory->io[_NR10 - 0xFF00] & 0x07;
     apu->ch1_sweep_timer = (pace == 0) ? 8 : pace;
     apu->ch1_sweep_enabled = (pace > 0 || shift > 0);
-    if (shift > 0) {
-        calculate_sweep_freq();
-    }
+    apu->ch1_sweep_neg_used = 0;
+    if (shift > 0) calculate_sweep_freq();
 }
 
 static void trigger_ch2(void) {
@@ -231,8 +232,9 @@ void apu_write_io(uint16_t addr, uint8_t val) {
                 apu->frame_step = 7;
                 apu->last_len_clock_div = 0;
                 apu->ch3_sample = 0;
-                apu->ch1_triggered_once = 0;
-                apu->ch2_triggered_once = 0;
+            apu->ch1_triggered_once = 0;
+            apu->ch2_triggered_once = 0;
+            apu->ch1_sweep_neg_used = 0;
                 apu->ch1_length = 64 - (memory->io[_NR11 - 0xFF00] & 0x3F);
                 apu->ch2_length = 64 - (memory->io[_NR21 - 0xFF00] & 0x3F);
                 apu->ch3_length = 256 - memory->io[_NR31 - 0xFF00];
@@ -287,6 +289,12 @@ void apu_write_io(uint16_t addr, uint8_t val) {
             uint8_t pace = (val >> 4) & 0x07;
             uint8_t shift = val & 0x07;
             if (pace == 0 && shift == 0) apu->ch1_sweep_enabled = 0;
+            /* Test 05 Fix: Clearing negate mode after a negate-mode calculation
+               since the last trigger disables the channel immediately */
+            if ((old_val & 0x08) && !(val & 0x08) && apu->ch1_sweep_neg_used) {
+                apu->ch1_enabled = 0;
+                memory->io[_NR52 - 0xFF00] &= ~1;
+            }
         }
     } else if (addr >= _NR21 && addr <= _NR24) {
         if (addr == _NR21) {
