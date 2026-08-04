@@ -677,6 +677,10 @@ void HALT() {
     } else if (!(memory->io[_IF - 0xFF00] & memory->ie & 0x1F)) {
         while (!(memory->io[_IF - 0xFF00] & memory->ie & 0x1F))
             update_timers(4);
+    } else if (ime_next >= 0 && ei) {
+        --reg->pc;
+        ime_next = -1;
+        handle_interrupts();
     } else
         halt_bug = true;
 }
@@ -684,13 +688,8 @@ void HALT() {
 void STOP() {
     ++reg->pc;
 
-    if (ime) {
-        while (!(memory->io[_IF - 0xFF00] & memory->ie & 0x1F))
+    while (!(memory->io[_IF - 0xFF00] & memory->ie & 0x1F))
             update_timers(4);
-    } else {
-        while (!(memory->io[_IF - 0xFF00] & memory->ie & 0x1F))
-            update_timers(4);
-    }
 }
 
 void DI() {

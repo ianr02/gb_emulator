@@ -69,7 +69,7 @@ void render_scanline(uint8_t ly) {
         }
     }
 
-    if (lcdc & 0x20) {
+    if ((lcdc & 0x20) && (lcdc & 0x01)) {
         uint8_t wy = memory->io[_WY - 0xFF00];
         int16_t wx = memory->io[_WX - 0xFF00] - 7;
 
@@ -122,7 +122,7 @@ void render_scanline(uint8_t ly) {
             for (int j = i + 1; j < count; j++) {
                 int xi = memory->oam[visible[i] * 4 + 1] - 8;
                 int xj = memory->oam[visible[j] * 4 + 1] - 8;
-                if (xj < xi || (xj == xi && visible[j] < visible[i])) {
+                if (xj < xi || (xj == xi && visible[j] > visible[i])) {
                     uint8_t tmp = visible[i];
                     visible[i] = visible[j];
                     visible[j] = tmp;
@@ -130,7 +130,7 @@ void render_scanline(uint8_t ly) {
             }
         }
 
-        for (int i = count - 1; i >= 0; i--) {
+        for (int i = 0; i < count; i++) {
             int idx = visible[i];
             int sprite_y = memory->oam[idx * 4] - 16;
             int sprite_x = memory->oam[idx * 4 + 1] - 8;

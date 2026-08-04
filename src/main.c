@@ -10,6 +10,8 @@ SDL_Texture  *ppu_texture;
 
 uint8_t joypad_dpad = 0x0F; 
 uint8_t joypad_btn  = 0x0F; 
+static uint8_t prev_dpad = 0x0F;
+static uint8_t prev_btn  = 0x0F;
 char savepath[256];
 size_t save_size;
 static SDL_AudioDeviceID audio_dev = 0;
@@ -133,7 +135,15 @@ int main(int argc, char *argv[]) {
                     case SDLK_RETURN:  joypad_btn  = pressed ? joypad_btn & ~8   : joypad_btn | 8;   break;  // Start
                     case SDLK_ESCAPE:  go = false; break;
                 }
-                memory->io[_IF - 0xFF00] |= 0x10;
+                if (pressed) {
+                    uint8_t joyp = memory->io[_JOYP - 0xFF00];
+                    if (!(joyp & 0x10) && joypad_dpad != prev_dpad)
+                        memory->io[_IF - 0xFF00] |= 0x10;
+                    if (!(joyp & 0x20) && joypad_btn != prev_btn)
+                        memory->io[_IF - 0xFF00] |= 0x10;
+                }
+                prev_dpad = joypad_dpad;
+                prev_btn  = joypad_btn;
             }
         }
         if (ime) {
@@ -150,7 +160,7 @@ int main(int argc, char *argv[]) {
         if (opcode_table[opcode] != NULL) {
             opcode_table[opcode]();
         } else {
-            exit(EXIT_FAILURE);
+            read_byte(reg->pc++); // illegal opcode: 2-byte NOP on DMG
         }
 
         if (memory->external[0] != prev_final) {
