@@ -211,6 +211,7 @@ int main(int argc, char *argv[]) {
 }
 
 void exit_game() {
+    /*
     int sf = open(savepath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (sf != -1) {
         write(sf, memory->external, save_size);
@@ -218,6 +219,7 @@ void exit_game() {
             write(sf, memory->rtc_regs, 5);
         close(sf);
     } 
+        */
     SDL_DestroyTexture(ppu_texture);
     SDL_DestroyRenderer(ppu_renderer);
     SDL_DestroyWindow(ppu_window);

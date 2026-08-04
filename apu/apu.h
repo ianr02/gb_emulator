@@ -39,6 +39,7 @@ typedef struct {
     uint16_t ch3_freq_latched;
     uint8_t  ch3_wave_pos;
     uint8_t  ch3_sample;
+    uint8_t  ch3_buffer;
     uint16_t ch3_length;
     uint8_t  ch3_enabled;
     uint8_t  ch3_dac_enabled;

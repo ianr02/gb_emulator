@@ -277,7 +277,7 @@ void apu_write_io(uint16_t addr, uint8_t val) {
             if (val & 0x80) trigger_ch1();
 
             /* RULE 1: In the first half of the length period (frame seq phase < 4096) */
-            int in_first_half = (apu->system_divider & 0x1FFF) >= 0x1000;
+            int in_first_half = (apu->system_divider & 0x1FFF) < 0x1000;
             if ((val & 0x40) && !old_len_enabled && in_first_half) {
                 if (apu->ch1_length > 0) {
                     apu->ch1_length--;
@@ -319,7 +319,7 @@ void apu_write_io(uint16_t addr, uint8_t val) {
             if (val & 0x80) trigger_ch2();
 
             /* RULE 1: In the first half of the length period (frame seq phase < 4096) */
-            int in_first_half = (apu->system_divider & 0x1FFF) >= 0x1000;
+            int in_first_half = (apu->system_divider & 0x1FFF) < 0x1000;
             if ((val & 0x40) && !old_len_enabled && in_first_half) {
                 if (apu->ch2_length > 0) {
                     apu->ch2_length--;
@@ -353,7 +353,7 @@ void apu_write_io(uint16_t addr, uint8_t val) {
             if (val & 0x80) trigger_ch3();
 
             /* RULE 1: In the first half of the length period (frame seq phase < 4096) */
-            int in_first_half = (apu->system_divider & 0x1FFF) >= 0x1000;
+            int in_first_half = (apu->system_divider & 0x1FFF) < 0x1000;
             if ((val & 0x40) && !old_len_enabled && in_first_half) {
                 if (apu->ch3_length > 0) {
                     apu->ch3_length--;
@@ -383,7 +383,7 @@ void apu_write_io(uint16_t addr, uint8_t val) {
             if (val & 0x80) trigger_ch4();
 
             /* RULE 1: In the first half of the length period (frame seq phase < 4096) */
-            int in_first_half = (apu->system_divider & 0x1FFF) >= 0x1000;
+            int in_first_half = (apu->system_divider & 0x1FFF) < 0x1000;
             if ((val & 0x40) && !old_len_enabled && in_first_half) {
                 if (apu->ch4_length > 0) {
                     apu->ch4_length--;
