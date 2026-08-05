@@ -2,8 +2,22 @@
 #include "core/emulator_core.h"
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <stdarg.h>
 
 APU *apu;
+static int gb_trace;
+static FILE *gb_tf;
+
+static void apu_trace_init(void) {
+    gb_trace = getenv("GB_TRACE_APU") != NULL;
+    if (gb_trace) gb_tf = fopen("apu_trace.log", "a");
+}
+static void apu_trace(const char *fmt, ...) {
+    if (!gb_trace) return;
+    va_list ap; va_start(ap, fmt);
+    vfprintf(gb_tf, fmt, ap); va_end(ap);
+}
 
 static const uint8_t duty[4][8] = {
     {0,0,0,0,0,0,0,1},
@@ -23,13 +37,16 @@ static uint16_t get_period(int ch) {
 }
 
 static void clock_length(int ch, uint16_t *len, uint8_t *enabled) {
+    apu_trace("LENCLK ch%d div=%04X before=%u ", ch, apu->system_divider, *len);
     if (*len > 0) {
         (*len)--;
         if (*len == 0) {
             *enabled = 0;
             memory->io[_NR52 - 0xFF00] &= ~(1 << ch);
+            apu_trace("-> DISABLED");
         }
     }
+    apu_trace("after=%u\n", *len);
 }
 
 /* Helper function for Test 04: Sweep frequency overflow calculation */
@@ -107,10 +124,11 @@ static void clock_envelope(int ch) {
 static void trigger_ch1(void) {
     uint8_t reg = memory->io[_NR12 - 0xFF00];
     apu->ch1_dac_enabled = ((reg >> 4) > 0 || ((reg >> 3) & 1));
+    apu_trace("TRIG1 div=%04X len=%u en=%u dac=%u\n", apu->system_divider, apu->ch1_length, apu->ch1_enabled, apu->ch1_dac_enabled);
+    if (apu->ch1_length == 0) apu->ch1_length = 64;
     if (!apu->ch1_dac_enabled) { apu->ch1_enabled = 0; memory->io[_NR52 - 0xFF00] &= ~1; return; }
     apu->ch1_enabled = 1;
     memory->io[_NR52 - 0xFF00] |= 1;
-    if (apu->ch1_length == 0) apu->ch1_length = 64;
     apu->ch1_freq_latched = (memory->io[_NR14 - 0xFF00] & 0x07) << 8 | memory->io[_NR13 - 0xFF00];
     uint16_t freq = get_period(0);
     apu->ch1_freq_timer = (freq & 0xFFFC) | (apu->ch1_freq_timer & 0x0003);
@@ -133,10 +151,10 @@ static void trigger_ch1(void) {
 static void trigger_ch2(void) {
     uint8_t reg = memory->io[_NR22 - 0xFF00];
     apu->ch2_dac_enabled = ((reg >> 4) > 0 || ((reg >> 3) & 1));
+    if (apu->ch2_length == 0) apu->ch2_length = 64;
     if (!apu->ch2_dac_enabled) { apu->ch2_enabled = 0; memory->io[_NR52 - 0xFF00] &= ~2; return; }
     apu->ch2_enabled = 1;
     memory->io[_NR52 - 0xFF00] |= 2;
-    if (apu->ch2_length == 0) apu->ch2_length = 64;
     apu->ch2_freq_latched = (memory->io[_NR24 - 0xFF00] & 0x07) << 8 | memory->io[_NR23 - 0xFF00];
     uint16_t freq = get_period(1);
     apu->ch2_freq_timer = (freq & 0xFFFC) | (apu->ch2_freq_timer & 0x0003);
@@ -149,10 +167,10 @@ static void trigger_ch2(void) {
 
 static void trigger_ch3(void) {
     apu->ch3_dac_enabled = (memory->io[_NR30 - 0xFF00] >> 7) & 1;
+    if (apu->ch3_length == 0) apu->ch3_length = 256;
     if (!apu->ch3_dac_enabled) { apu->ch3_enabled = 0; memory->io[_NR52 - 0xFF00] &= ~4; return; }
     apu->ch3_enabled = 1;
     memory->io[_NR52 - 0xFF00] |= 4;
-    if (apu->ch3_length == 0) apu->ch3_length = 256;
     apu->ch3_freq_latched = (memory->io[_NR34 - 0xFF00] & 0x07) << 8 | memory->io[_NR33 - 0xFF00];
     uint16_t freq = get_period(2);
     apu->ch3_freq_timer = (freq & 0xFFFC) | (apu->ch3_freq_timer & 0x0003);
@@ -163,10 +181,10 @@ static void trigger_ch3(void) {
 static void trigger_ch4(void) {
     uint8_t reg = memory->io[_NR42 - 0xFF00];
     apu->ch4_dac_enabled = ((reg >> 4) > 0 || ((reg >> 3) & 1));
+    if (apu->ch4_length == 0) apu->ch4_length = 64;
     if (!apu->ch4_dac_enabled) { apu->ch4_enabled = 0; memory->io[_NR52 - 0xFF00] &= ~8; return; }
     apu->ch4_enabled = 1;
     memory->io[_NR52 - 0xFF00] |= 8;
-    if (apu->ch4_length == 0) apu->ch4_length = 64;
     apu->ch4_volume = reg >> 4;
     uint8_t env_period = reg & 0x07;
     uint8_t env_pace_val = (env_period == 0) ? 8 : env_period;
@@ -182,6 +200,7 @@ static void trigger_ch4(void) {
 
 void apu_init(void) {
     apu = calloc(1, sizeof(APU));
+    apu_trace_init();
     apu->ch4_lfsr = 0x7FFF;
     apu->apu_enabled = (memory->io[_NR52 - 0xFF00] >> 7) & 1;
     apu->frame_step = 7;
@@ -266,6 +285,7 @@ void apu_write_io(uint16_t addr, uint8_t val) {
     if (addr >= _NR10 && addr <= _NR14) {
         if (addr == _NR11) {
             apu->ch1_length = 64 - (val & 0x3F);
+            apu_trace("WR11 div=%04X val=%02X len=%u\n", apu->system_divider, val, apu->ch1_length);
         }
         if (addr == _NR12) {
             apu->ch1_dac_enabled = ((val >> 4) > 0 || ((val >> 3) & 1));
@@ -274,24 +294,26 @@ void apu_write_io(uint16_t addr, uint8_t val) {
         if (addr == _NR14) {
             apu->ch1_freq_latched = (val & 0x07) << 8 | memory->io[_NR13 - 0xFF00];
             uint8_t old_len_enabled = apu->ch1_len_enabled;
-            if (val & 0x80) trigger_ch1();
+            int in_first_half = (apu->system_divider & 0x3FFF) >= 0x2000;
 
-            /* RULE 1: In the first half of the length period (frame seq phase < 4096) */
-            int in_first_half = (apu->system_divider & 0x1FFF) >= 0x1000;
-            if ((val & 0x40) && !old_len_enabled && in_first_half) {
-                if (apu->ch1_length > 0) {
-                    apu->ch1_length--;
-                    if (apu->ch1_length == 0) {
-                        /* RULE 3: Explicitly setting length = 63 on simultaneous trigger + extra-clock */
-                        if (val & 0x80) {
-                            apu->ch1_length = 63;
-                        } else {
-                            apu->ch1_enabled = 0;
-                            memory->io[_NR52 - 0xFF00] &= ~1;
-                        }
-                    }
+            /* RULE A: Extra clock when length disabled -> enabled and length not zero */
+            if ((val & 0x40) && !old_len_enabled && in_first_half && apu->ch1_length > 0) {
+                apu->ch1_length--;
+                if (apu->ch1_length == 0 && !(val & 0x80)) {
+                    apu->ch1_enabled = 0;
+                    memory->io[_NR52 - 0xFF00] &= ~1;
                 }
             }
+
+            int len_was_zero = (apu->ch1_length == 0);
+            if (val & 0x80) trigger_ch1();
+
+            /* RULE B: Trigger that reloads a frozen-zero length clocks it to max-1 */
+            if ((val & 0x80) && len_was_zero && in_first_half && (val & 0x40)) {
+                apu->ch1_length = 63;
+            }
+            apu_trace("WR14 div=%04X val=%02X oldlenen=%u in1sthalf=%d len=%u\n",
+                      apu->system_divider, val, old_len_enabled, in_first_half, apu->ch1_length);
             apu->ch1_len_enabled = (val >> 6) & 1;
         }
         if (addr == _NR10) {
@@ -308,6 +330,7 @@ void apu_write_io(uint16_t addr, uint8_t val) {
     } else if (addr >= _NR21 && addr <= _NR24) {
         if (addr == _NR21) {
             apu->ch2_length = 64 - (val & 0x3F);
+            apu_trace("WR21 div=%04X val=%02X len=%u\n", apu->system_divider, val, apu->ch2_length);
         }
         if (addr == _NR22) {
             apu->ch2_dac_enabled = ((val >> 4) > 0 || ((val >> 3) & 1));
@@ -316,24 +339,26 @@ void apu_write_io(uint16_t addr, uint8_t val) {
         if (addr == _NR24) {
             apu->ch2_freq_latched = (val & 0x07) << 8 | memory->io[_NR23 - 0xFF00];
             uint8_t old_len_enabled = apu->ch2_len_enabled;
-            if (val & 0x80) trigger_ch2();
+            int in_first_half = (apu->system_divider & 0x3FFF) >= 0x2000;
 
-            /* RULE 1: In the first half of the length period (frame seq phase < 4096) */
-            int in_first_half = (apu->system_divider & 0x1FFF) >= 0x1000;
-            if ((val & 0x40) && !old_len_enabled && in_first_half) {
-                if (apu->ch2_length > 0) {
-                    apu->ch2_length--;
-                    if (apu->ch2_length == 0) {
-                        /* RULE 3: Explicitly setting length = 63 on simultaneous trigger + extra-clock */
-                        if (val & 0x80) {
-                            apu->ch2_length = 63;
-                        } else {
-                            apu->ch2_enabled = 0;
-                            memory->io[_NR52 - 0xFF00] &= ~2;
-                        }
-                    }
+            /* RULE A: Extra clock when length disabled -> enabled and length not zero */
+            if ((val & 0x40) && !old_len_enabled && in_first_half && apu->ch2_length > 0) {
+                apu->ch2_length--;
+                if (apu->ch2_length == 0 && !(val & 0x80)) {
+                    apu->ch2_enabled = 0;
+                    memory->io[_NR52 - 0xFF00] &= ~2;
                 }
             }
+
+            int len_was_zero = (apu->ch2_length == 0);
+            if (val & 0x80) trigger_ch2();
+
+            /* RULE B: Trigger that reloads a frozen-zero length clocks it to max-1 */
+            if ((val & 0x80) && len_was_zero && in_first_half && (val & 0x40)) {
+                apu->ch2_length = 63;
+            }
+            apu_trace("WR24 div=%04X val=%02X oldlenen=%u in1sthalf=%d len=%u\n",
+                      apu->system_divider, val, old_len_enabled, in_first_half, apu->ch2_length);
             apu->ch2_len_enabled = (val >> 6) & 1;
         }
     } else if (addr >= _NR30 && addr <= _NR34) {
@@ -350,24 +375,26 @@ void apu_write_io(uint16_t addr, uint8_t val) {
         if (addr == _NR34) {
             apu->ch3_freq_latched = (val & 0x07) << 8 | memory->io[_NR33 - 0xFF00];
             uint8_t old_len_enabled = apu->ch3_len_enabled;
-            if (val & 0x80) trigger_ch3();
+            int in_first_half = (apu->system_divider & 0x3FFF) >= 0x2000;
 
-            /* RULE 1: In the first half of the length period (frame seq phase < 4096) */
-            int in_first_half = (apu->system_divider & 0x1FFF) >= 0x1000;
-            if ((val & 0x40) && !old_len_enabled && in_first_half) {
-                if (apu->ch3_length > 0) {
-                    apu->ch3_length--;
-                    if (apu->ch3_length == 0) {
-                        /* RULE 3: Explicitly setting length = 255 for CH3 on simultaneous trigger + extra-clock */
-                        if (val & 0x80) {
-                            apu->ch3_length = 255;
-                        } else {
-                            apu->ch3_enabled = 0;
-                            memory->io[_NR52 - 0xFF00] &= ~4;
-                        }
-                    }
+            /* RULE A: Extra clock when length disabled -> enabled and length not zero */
+            if ((val & 0x40) && !old_len_enabled && in_first_half && apu->ch3_length > 0) {
+                apu->ch3_length--;
+                if (apu->ch3_length == 0 && !(val & 0x80)) {
+                    apu->ch3_enabled = 0;
+                    memory->io[_NR52 - 0xFF00] &= ~4;
                 }
             }
+
+            int len_was_zero = (apu->ch3_length == 0);
+            if (val & 0x80) trigger_ch3();
+
+            /* RULE B: Trigger that reloads a frozen-zero length clocks it to max-1 */
+            if ((val & 0x80) && len_was_zero && in_first_half && (val & 0x40)) {
+                apu->ch3_length = 255;
+            }
+            apu_trace("WR34 div=%04X val=%02X oldlenen=%u in1sthalf=%d len=%u\n",
+                      apu->system_divider, val, old_len_enabled, in_first_half, apu->ch3_length);
             apu->ch3_len_enabled = (val >> 6) & 1;
         }
     } else if (addr >= _NR41 && addr <= _NR44) {
@@ -380,23 +407,23 @@ void apu_write_io(uint16_t addr, uint8_t val) {
         }
         if (addr == _NR44) {
             uint8_t old_len_enabled = apu->ch4_len_enabled;
+            int in_first_half = (apu->system_divider & 0x3FFF) >= 0x2000;
+
+            /* RULE A: Extra clock when length disabled -> enabled and length not zero */
+            if ((val & 0x40) && !old_len_enabled && in_first_half && apu->ch4_length > 0) {
+                apu->ch4_length--;
+                if (apu->ch4_length == 0 && !(val & 0x80)) {
+                    apu->ch4_enabled = 0;
+                    memory->io[_NR52 - 0xFF00] &= ~8;
+                }
+            }
+
+            int len_was_zero = (apu->ch4_length == 0);
             if (val & 0x80) trigger_ch4();
 
-            /* RULE 1: In the first half of the length period (frame seq phase < 4096) */
-            int in_first_half = (apu->system_divider & 0x1FFF) >= 0x1000;
-            if ((val & 0x40) && !old_len_enabled && in_first_half) {
-                if (apu->ch4_length > 0) {
-                    apu->ch4_length--;
-                    if (apu->ch4_length == 0) {
-                        /* RULE 3: Explicitly setting length = 63 on simultaneous trigger + extra-clock */
-                        if (val & 0x80) {
-                            apu->ch4_length = 63;
-                        } else {
-                            apu->ch4_enabled = 0;
-                            memory->io[_NR52 - 0xFF00] &= ~8;
-                        }
-                    }
-                }
+            /* RULE B: Trigger that reloads a frozen-zero length clocks it to max-1 */
+            if ((val & 0x80) && len_was_zero && in_first_half && (val & 0x40)) {
+                apu->ch4_length = 63;
             }
             apu->ch4_len_enabled = (val >> 6) & 1;
         }
