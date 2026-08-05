@@ -6,18 +6,6 @@
 #include <stdarg.h>
 
 APU *apu;
-static int gb_trace;
-static FILE *gb_tf;
-
-static void apu_trace_init(void) {
-    gb_trace = getenv("GB_TRACE_APU") != NULL;
-    if (gb_trace) gb_tf = fopen("apu_trace.log", "a");
-}
-static void apu_trace(const char *fmt, ...) {
-    if (!gb_trace) return;
-    va_list ap; va_start(ap, fmt);
-    vfprintf(gb_tf, fmt, ap); va_end(ap);
-}
 
 static const uint8_t duty[4][8] = {
     {0,0,0,0,0,0,0,1},
@@ -37,19 +25,15 @@ static uint16_t get_period(int ch) {
 }
 
 static void clock_length(int ch, uint16_t *len, uint8_t *enabled) {
-    apu_trace("LENCLK ch%d div=%04X before=%u ", ch, apu->system_divider, *len);
     if (*len > 0) {
         (*len)--;
         if (*len == 0) {
             *enabled = 0;
             memory->io[_NR52 - 0xFF00] &= ~(1 << ch);
-            apu_trace("-> DISABLED");
         }
     }
-    apu_trace("after=%u\n", *len);
 }
 
-/* Helper function for Test 04: Sweep frequency overflow calculation */
 static uint16_t calculate_sweep_freq(void) {
     uint8_t dir   = (memory->io[_NR10 - 0xFF00] >> 3) & 1;
     uint8_t shift = memory->io[_NR10 - 0xFF00] & 0x07;
@@ -124,7 +108,6 @@ static void clock_envelope(int ch) {
 static void trigger_ch1(void) {
     uint8_t reg = memory->io[_NR12 - 0xFF00];
     apu->ch1_dac_enabled = ((reg >> 4) > 0 || ((reg >> 3) & 1));
-    apu_trace("TRIG1 div=%04X len=%u en=%u dac=%u\n", apu->system_divider, apu->ch1_length, apu->ch1_enabled, apu->ch1_dac_enabled);
     if (apu->ch1_length == 0) apu->ch1_length = 64;
     if (!apu->ch1_dac_enabled) { apu->ch1_enabled = 0; memory->io[_NR52 - 0xFF00] &= ~1; return; }
     apu->ch1_enabled = 1;
@@ -200,13 +183,11 @@ static void trigger_ch4(void) {
 
 void apu_init(void) {
     apu = calloc(1, sizeof(APU));
-    apu_trace_init();
     apu->ch4_lfsr = 0x7FFF;
     apu->apu_enabled = (memory->io[_NR52 - 0xFF00] >> 7) & 1;
     apu->frame_step = 7;
 }
 
-/* Test 07 Fix: Falling edge clocking on DIV bit 12 without clearing last_len_clock_div anchor */
 void apu_div_write(void) {
     int advance = (apu->system_divider & 0x1000) != 0;
     apu->system_divider = 0;
@@ -236,7 +217,6 @@ void apu_write_io(uint16_t addr, uint8_t val) {
     uint16_t idx = addr - 0xFF00;
 
     if (addr == _NR52) {
-        apu_trace("NR52 div=%04X val=%02X was=%d\n", apu->system_divider, val, apu->apu_enabled);
         if (!(val & 0x80)) {
             uint8_t len1 = memory->io[_NR11 - 0xFF00] & 0x3F;
             uint8_t len2 = memory->io[_NR21 - 0xFF00] & 0x3F;
@@ -260,9 +240,9 @@ void apu_write_io(uint16_t addr, uint8_t val) {
                 apu->last_len_clock_div = 0;
                 apu->ch3_sample = 0;
                 apu->ch3_buffer = 0;
-            apu->ch1_triggered_once = 0;
-            apu->ch2_triggered_once = 0;
-            apu->ch1_sweep_neg_used = 0;
+                apu->ch1_triggered_once = 0;
+                apu->ch2_triggered_once = 0;
+                apu->ch1_sweep_neg_used = 0;
                 apu->ch1_length = 64 - (memory->io[_NR11 - 0xFF00] & 0x3F);
                 apu->ch2_length = 64 - (memory->io[_NR21 - 0xFF00] & 0x3F);
                 apu->ch3_length = 256 - memory->io[_NR31 - 0xFF00];
@@ -297,7 +277,6 @@ void apu_write_io(uint16_t addr, uint8_t val) {
     if (addr >= _NR10 && addr <= _NR14) {
         if (addr == _NR11) {
             apu->ch1_length = 64 - (val & 0x3F);
-            apu_trace("WR11 div=%04X val=%02X len=%u\n", apu->system_divider, val, apu->ch1_length);
         }
         if (addr == _NR12) {
             apu->ch1_dac_enabled = ((val >> 4) > 0 || ((val >> 3) & 1));
@@ -324,16 +303,13 @@ void apu_write_io(uint16_t addr, uint8_t val) {
             if ((val & 0x80) && len_was_zero && in_first_half && (val & 0x40)) {
                 apu->ch1_length = 63;
             }
-            apu_trace("WR14 div=%04X val=%02X oldlenen=%u in1sthalf=%d len=%u\n",
-                      apu->system_divider, val, old_len_enabled, in_first_half, apu->ch1_length);
             apu->ch1_len_enabled = (val >> 6) & 1;
         }
         if (addr == _NR10) {
             uint8_t pace = (val >> 4) & 0x07;
             uint8_t shift = val & 0x07;
             if (pace == 0 && shift == 0) apu->ch1_sweep_enabled = 0;
-            /* Test 05 Fix: Clearing negate mode after a negate-mode calculation
-               since the last trigger disables the channel immediately */
+            
             if ((old_val & 0x08) && !(val & 0x08) && apu->ch1_sweep_neg_used) {
                 apu->ch1_enabled = 0;
                 memory->io[_NR52 - 0xFF00] &= ~1;
@@ -342,7 +318,6 @@ void apu_write_io(uint16_t addr, uint8_t val) {
     } else if (addr >= _NR21 && addr <= _NR24) {
         if (addr == _NR21) {
             apu->ch2_length = 64 - (val & 0x3F);
-            apu_trace("WR21 div=%04X val=%02X len=%u\n", apu->system_divider, val, apu->ch2_length);
         }
         if (addr == _NR22) {
             apu->ch2_dac_enabled = ((val >> 4) > 0 || ((val >> 3) & 1));
@@ -369,8 +344,6 @@ void apu_write_io(uint16_t addr, uint8_t val) {
             if ((val & 0x80) && len_was_zero && in_first_half && (val & 0x40)) {
                 apu->ch2_length = 63;
             }
-            apu_trace("WR24 div=%04X val=%02X oldlenen=%u in1sthalf=%d len=%u\n",
-                      apu->system_divider, val, old_len_enabled, in_first_half, apu->ch2_length);
             apu->ch2_len_enabled = (val >> 6) & 1;
         }
     } else if (addr >= _NR30 && addr <= _NR34) {
@@ -405,8 +378,6 @@ void apu_write_io(uint16_t addr, uint8_t val) {
             if ((val & 0x80) && len_was_zero && in_first_half && (val & 0x40)) {
                 apu->ch3_length = 255;
             }
-            apu_trace("WR34 div=%04X val=%02X oldlenen=%u in1sthalf=%d len=%u\n",
-                      apu->system_divider, val, old_len_enabled, in_first_half, apu->ch3_length);
             apu->ch3_len_enabled = (val >> 6) & 1;
         }
     } else if (addr >= _NR41 && addr <= _NR44) {
