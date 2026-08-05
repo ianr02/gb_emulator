@@ -273,6 +273,8 @@ void apu_write_io(uint16_t addr, uint8_t val) {
     }
 
     if (!apu->apu_enabled) {
+        /* While off, only length bits are written (test 01 chk 6: duty/other
+           regs stay clear; test 08: lengths must survive power-on). */
         if (addr == _NR41) {
             memory->io[idx] = val;
             apu->ch4_length = 64 - (val & 0x3F);
@@ -280,10 +282,10 @@ void apu_write_io(uint16_t addr, uint8_t val) {
             memory->io[idx] = val;
             apu->ch3_length = 256 - val;
         } else if (addr == _NR21) {
-            memory->io[idx] = val;
+            memory->io[idx] = val & 0x3F;
             apu->ch2_length = 64 - (val & 0x3F);
         } else if (addr == _NR11) {
-            memory->io[idx] = val;
+            memory->io[idx] = val & 0x3F;
             apu->ch1_length = 64 - (val & 0x3F);
         }
         return;
