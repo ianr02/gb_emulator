@@ -80,7 +80,6 @@
 
 // Interrupt Enable Register
 #define _IF   0xFF0F
-#define _IE   0xFFFF
 
 
 typedef void (*instruction_ptr)(void);

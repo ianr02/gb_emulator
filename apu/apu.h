@@ -2,6 +2,8 @@
 #define APU_H
 
 #include "src/structs.h"
+#include <string.h>
+#include <stdlib.h>
 
 #define AUDIO_SAMPLE_RATE 44100
 #define AUDIO_CYCLES_PER_SAMPLE (4194304 / 44100)
@@ -17,7 +19,6 @@ typedef struct {
     uint8_t  ch1_dac_enabled;
     uint8_t  ch1_len_enabled;
     uint8_t  ch1_env_pace;
-    uint8_t  ch1_triggered_once;
 
     uint16_t ch1_sweep_shadow;
     uint8_t  ch1_sweep_timer;
@@ -33,7 +34,6 @@ typedef struct {
     uint8_t  ch2_dac_enabled;
     uint8_t  ch2_len_enabled;
     uint8_t  ch2_env_pace;
-    uint8_t  ch2_triggered_once;
 
     uint16_t ch3_freq_timer;
     uint16_t ch3_freq_latched;
@@ -59,9 +59,6 @@ typedef struct {
     uint16_t system_divider;
     uint8_t  frame_step;
     uint8_t  apu_enabled;
-    uint16_t last_len_clock_div;
-    uint8_t  len_phase_counter;
-    uint8_t  _pad[1];
 
     uint32_t cycle_acc;
     int32_t  hp_cap_l;

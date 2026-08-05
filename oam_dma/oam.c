@@ -74,15 +74,7 @@ void oam_bug_incdec(void) {
     oam_corrupt_write(ppu_oam_row());
 }
 
-// Trigger the combined read + implied inc/dec corruption (LD A,(HL+/-),
-// first read of POP/RET when SP is in OAM).
-void oam_bug_read_inc(void) {
-    oam_corrupt_read_inc(ppu_oam_row());
-}
-
-// A bus read/write is serviced by the PPU one M-cycle before the emulator
-// sees it (read_byte/save_byte advance the clock first), so the row is
-// looked up at m-1.
+// Serviced one M-cycle before the emulator sees it
 static uint8_t oam_access_row(void) {
     return ppu_oam_row_at(ppu_m_cycle() - 1);
 }

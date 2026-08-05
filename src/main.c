@@ -117,7 +117,6 @@ int main(int argc, char *argv[]) {
 
     bool go = true;
     uint8_t prev_final = 0;
-    int frame_count = 0;
     while(go){
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
@@ -211,15 +210,13 @@ int main(int argc, char *argv[]) {
 }
 
 void exit_game() {
-    /*
     int sf = open(savepath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (sf != -1) {
         write(sf, memory->external, save_size);
         if (memory->cart_type == CART_MBC3)
             write(sf, memory->rtc_regs, 5);
         close(sf);
-    } 
-        */
+    }
     SDL_DestroyTexture(ppu_texture);
     SDL_DestroyRenderer(ppu_renderer);
     SDL_DestroyWindow(ppu_window);

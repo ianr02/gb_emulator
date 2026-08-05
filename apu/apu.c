@@ -1,9 +1,5 @@
 #include "apu/apu.h"
 #include "core/emulator_core.h"
-#include <string.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdarg.h>
 
 APU *apu;
 
@@ -200,9 +196,6 @@ void apu_div_write(void) {
             if (apu->ch2_len_enabled) clock_length(1, &apu->ch2_length, &apu->ch2_enabled);
             if (apu->ch3_len_enabled) clock_length(2, &apu->ch3_length, &apu->ch3_enabled);
             if (apu->ch4_len_enabled) clock_length(3, &apu->ch4_length, &apu->ch4_enabled);
-            
-            /* RULE 2: Anchor the reference cycle cleanly whenever length counters clock */
-            apu->last_len_clock_div = (step >> 1) * 0x4000;
         }
         if (step == 2 || step == 6) clock_sweep();
         if (step == 7) {
@@ -237,11 +230,8 @@ void apu_write_io(uint16_t addr, uint8_t val) {
             if (!was_on) {
                 apu->system_divider = 0;
                 apu->frame_step = 7;
-                apu->last_len_clock_div = 0;
                 apu->ch3_sample = 0;
                 apu->ch3_buffer = 0;
-                apu->ch1_triggered_once = 0;
-                apu->ch2_triggered_once = 0;
                 apu->ch1_sweep_neg_used = 0;
                 apu->ch1_length = 64 - (memory->io[_NR11 - 0xFF00] & 0x3F);
                 apu->ch2_length = 64 - (memory->io[_NR21 - 0xFF00] & 0x3F);
@@ -508,9 +498,6 @@ void apu_step(uint16_t cycles) {
             if (len_en2) clock_length(1, &apu->ch2_length, &apu->ch2_enabled);
             if (len_en3) clock_length(2, &apu->ch3_length, &apu->ch3_enabled);
             if (len_en4) clock_length(3, &apu->ch4_length, &apu->ch4_enabled);
-            
-            /* RULE 2: Anchor reference cycle cleanly */
-            apu->last_len_clock_div = (step >> 1) * 0x4000;
         }
         if (step == 2 || step == 6) clock_sweep();
         if (step == 7) {
