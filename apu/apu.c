@@ -236,6 +236,7 @@ void apu_write_io(uint16_t addr, uint8_t val) {
     uint16_t idx = addr - 0xFF00;
 
     if (addr == _NR52) {
+        apu_trace("NR52 div=%04X val=%02X was=%d\n", apu->system_divider, val, apu->apu_enabled);
         if (!(val & 0x80)) {
             uint8_t len1 = memory->io[_NR11 - 0xFF00] & 0x3F;
             uint8_t len2 = memory->io[_NR21 - 0xFF00] & 0x3F;
@@ -275,6 +276,15 @@ void apu_write_io(uint16_t addr, uint8_t val) {
         if (addr == _NR41) {
             memory->io[idx] = val;
             apu->ch4_length = 64 - (val & 0x3F);
+        } else if (addr == _NR31) {
+            memory->io[idx] = val;
+            apu->ch3_length = 256 - val;
+        } else if (addr == _NR21) {
+            memory->io[idx] = val;
+            apu->ch2_length = 64 - (val & 0x3F);
+        } else if (addr == _NR11) {
+            memory->io[idx] = val;
+            apu->ch1_length = 64 - (val & 0x3F);
         }
         return;
     }
