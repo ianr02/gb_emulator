@@ -68,8 +68,6 @@ static void clock_sweep(void) {
                     memory->io[_NR13 - 0xFF00] = new_freq & 0xFF;
                     memory->io[_NR14 - 0xFF00] = (memory->io[_NR14 - 0xFF00] & ~0x07) | ((new_freq >> 8) & 0x07);
                     apu->ch1_freq_latched = apu->ch1_sweep_shadow;
-
-                    /* Test 04 Fix: Second overflow check immediately after writeback */
                     calculate_sweep_freq();
                 }
             }
@@ -245,8 +243,6 @@ void apu_write_io(uint16_t addr, uint8_t val) {
     }
 
     if (!apu->apu_enabled) {
-        /* While off, only length bits are written (test 01 chk 6: duty/other
-           regs stay clear; test 08: lengths must survive power-on). */
         if (addr == _NR41) {
             memory->io[idx] = val;
             apu->ch4_length = 64 - (val & 0x3F);

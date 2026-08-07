@@ -16,12 +16,6 @@ char savepath[256];
 size_t save_size;
 static SDL_AudioDeviceID audio_dev = 0;
 
-/* Audio-queue pacing water levels (bytes). Holding ~92 ms of samples means we
-   park the emulator only while the device drains, so CPU/APU speed is driven by
-   the sound hardware rather than by how slow the video renderer is. */
-#define AUDIO_HIGH_BYTES  (unsigned)(0.092 * 44100 * 2 * 2)
-#define AUDIO_LOW_BYTES   (unsigned)(0.024 * 44100 * 2 * 2)
-
 void exit_game();
 
 int main(int argc, char *argv[]) {

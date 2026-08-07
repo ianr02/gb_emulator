@@ -21,6 +21,7 @@ A Game Boy emulator written in C with an SDL2 frontend.
 | `interrupt_time.gb` | Passes (DMG portion; the test is designed for both DMG and GBC) |
 | `halt_bug.gb` | Passes |
 | `oam_bug.gb` | Passes |
+| `dmg_sound.gb` | Passes `01`–`08`, `11` (Blargg APU suite) |
 
 ## Build
 
@@ -50,3 +51,11 @@ Battery saves are written to `.saves/`.
 | Select   | Right Shift |
 | Start    | Enter     |
 | Quit     | Escape    |
+
+## Known Issues
+
+Some games leave sound channels enabled (with an increasing volume envelope and no
+length counter) during silent interludes, causing a steady tone instead of silence.
+This is heard, for example, on Tetris's title/copyright screen before the theme and in
+quiet moments throughout Kirby's Dream Land. It mirrors what the written register
+state requests; fixing it would require deviating from raw hardware fidelity.

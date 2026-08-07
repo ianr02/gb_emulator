@@ -13,6 +13,8 @@
 #include <string.h>
 
 #define INIT_PC 0x0100
+#define AUDIO_HIGH_BYTES  (unsigned)(0.092 * 44100 * 2 * 2)
+#define AUDIO_LOW_BYTES   (unsigned)(0.024 * 44100 * 2 * 2)
 
 #define CART_ROM_ONLY 0x00
 #define CART_MBC1     0x01 
