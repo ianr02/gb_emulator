@@ -16,6 +16,12 @@ char savepath[256];
 size_t save_size;
 static SDL_AudioDeviceID audio_dev = 0;
 
+/* Audio-queue pacing water levels (bytes). Holding ~92 ms of samples means we
+   park the emulator only while the device drains, so CPU/APU speed is driven by
+   the sound hardware rather than by how slow the video renderer is. */
+#define AUDIO_HIGH_BYTES  (unsigned)(0.092 * 44100 * 2 * 2)
+#define AUDIO_LOW_BYTES   (unsigned)(0.024 * 44100 * 2 * 2)
+
 void exit_game();
 
 int main(int argc, char *argv[]) {
@@ -105,7 +111,7 @@ int main(int argc, char *argv[]) {
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
     ppu_window   = SDL_CreateWindow("Game Boy", SDL_WINDOWPOS_CENTERED,
                                     SDL_WINDOWPOS_CENTERED, 160*4, 144*4, 0);
-    ppu_renderer = SDL_CreateRenderer(ppu_window, -1, SDL_RENDERER_ACCELERATED);
+    ppu_renderer = SDL_CreateRenderer(ppu_window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     ppu_texture  = SDL_CreateTexture(ppu_renderer, SDL_PIXELFORMAT_ARGB8888,
                                      SDL_TEXTUREACCESS_STREAMING, 160, 144);
     SDL_RenderSetLogicalSize(ppu_renderer, 160, 144);
@@ -188,20 +194,25 @@ int main(int argc, char *argv[]) {
             if (n > 0)
                 SDL_QueueAudio(audio_dev, buf, n * 4);
 
-            static uint32_t last_sync_time = 0;
-            static uint32_t last_sync_div = 0;
-            if (last_sync_time == 0) {
-                last_sync_time = SDL_GetTicks();
-                last_sync_div = div_counter;
-            } else {
-                uint32_t now = SDL_GetTicks();
-                uint32_t delta_time = now - last_sync_time;
-                uint32_t delta_div  = div_counter - last_sync_div;
-                uint32_t expected_delta = delta_div * 1000 / 4194304;
-                if (expected_delta > delta_time)
-                    SDL_Delay(expected_delta - delta_time);
-                last_sync_time = SDL_GetTicks();
-                last_sync_div = div_counter;
+            /* Pace the emulator by how fast the audio device consumes samples.
+               When the queue is full we pause until it drains, so emulation
+               speed (and thus APU sample rate) is tied to the sound hardware
+               rather than to how slow the video renderer might be. */
+            if (SDL_GetQueuedAudioSize(audio_dev) >= AUDIO_HIGH_BYTES) {
+                uint32_t drain_t0 = SDL_GetTicks();
+                while (SDL_GetQueuedAudioSize(audio_dev) > AUDIO_LOW_BYTES) {
+                    if (SDL_GetTicks() - drain_t0 > 500) break; /* non-draining device */
+                    SDL_Delay(1);
+                }
+            }
+
+            /* Present at a modest cadence so the frame is always shown without
+               ever hot-looping the (possibly slow) renderer. */
+            static uint32_t last_present = 0;
+            uint32_t now = SDL_GetTicks();
+            if (now - last_present >= 16) {
+                ppu_present();
+                last_present = now;
             }
         }
     }

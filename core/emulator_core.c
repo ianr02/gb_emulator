@@ -90,7 +90,7 @@ void init_io_ports(void) {
 
     memory->io[_NR50 - 0xFF00] = 0x77;
     memory->io[_NR51 - 0xFF00] = 0xF3;
-    memory->io[_NR52 - 0xFF00] = 0xF0;
+    memory->io[_NR52 - 0xFF00] = 0x00;
 
     memory->io[_LCDC - 0xFF00] = 0x91;
     memory->io[_SCY  - 0xFF00] = 0x00;

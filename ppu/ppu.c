@@ -263,14 +263,6 @@ void update_ppu(uint16_t cycles) {
             memory->io[_IF - 0xFF00] |= 0x01;
             stat = (stat & 0xFC) | 0x01;
             SDL_UpdateTexture(ppu_texture, NULL, framebuffer, 160 * sizeof(uint32_t));
-            static uint32_t last_frame = 0;
-            uint32_t now = SDL_GetTicks();
-            uint32_t elapsed = now - last_frame;
-            if (elapsed < 16 && last_frame != 0)
-                SDL_Delay(16 - elapsed);
-            last_frame = SDL_GetTicks();
-            SDL_RenderCopy(ppu_renderer, ppu_texture, NULL, NULL);
-            SDL_RenderPresent(ppu_renderer);
         } else if (ly >= 145 && ly <= 153) {
             stat = (stat & 0xFC) | 0x01;
         } else if (ly == 154) {
@@ -321,4 +313,12 @@ void update_ppu(uint16_t cycles) {
     if (cur && !prev_stat_line)
         memory->io[_IF - 0xFF00] |= 0x02;
     prev_stat_line = cur;
+}
+
+/* Called from the main loop while the emulator is idle waiting for audio to
+   drain, so rendering never blocks the CPU/APU emulation. */
+void ppu_present(void) {
+    if (!ppu_renderer) return;
+    SDL_RenderCopy(ppu_renderer, ppu_texture, NULL, NULL);
+    SDL_RenderPresent(ppu_renderer);
 }

@@ -237,6 +237,8 @@ void apu_write_io(uint16_t addr, uint8_t val) {
                 apu->ch2_length = 64 - (memory->io[_NR21 - 0xFF00] & 0x3F);
                 apu->ch3_length = 256 - memory->io[_NR31 - 0xFF00];
                 apu->ch4_length = 64 - (memory->io[_NR41 - 0xFF00] & 0x3F);
+                apu->hp_cap_l = 0;
+                apu->hp_cap_r = 0;
             }
         }
         return;
@@ -464,8 +466,12 @@ static void mix(int16_t *left, int16_t *right) {
         apu->hp_cap_l += out_l / 256;
         apu->hp_cap_r += out_r / 256;
     } else {
-        apu->hp_cap_l = 0;
-        apu->hp_cap_r = 0;
+        /* Don't snap the DC-blocking cap to 0 on silence: a note that begins
+           after an idle gap would otherwise start from a full-scale step and
+           ring as a low-frequency buzz/static. Gently leak the cap instead so
+           the filter state stays continuous. */
+        apu->hp_cap_l = (int32_t)(((int64_t)apu->hp_cap_l * 1023) / 1024);
+        apu->hp_cap_r = (int32_t)(((int64_t)apu->hp_cap_r * 1023) / 1024);
         out_l = 0;
         out_r = 0;
     }

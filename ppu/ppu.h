@@ -22,5 +22,6 @@ uint8_t ppu_oam_row(void);
 uint8_t ppu_oam_row_at(int m);
 int ppu_m_cycle(void);
 void ppu_lcd_on_phase(void);
+void ppu_present(void);
 
 #endif
